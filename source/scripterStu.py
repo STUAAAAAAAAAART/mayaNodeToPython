@@ -213,9 +213,56 @@ for node in checkList:
 	nodeCounter += addToCounter
 
 # print phase: print all commands for creation and connections
-# TODO: write text to file (honestly copying from the script editor will do for now)
+# TODO: write text to file
 
 
+fileNameMa = mc.file(q=True, sn=True, shn=True)
+fileRootPathMa = mc.file(q=True, sn = True)[: -(len(fileNameMa))]
+# example output: D:/Folder01/project03/
+# os.getcwd() does not update in maya when an other file is opened
+
+from datetime import datetime as dt
+saveTime = dt.now()
+# get timestamp in current day (24h not unix, 0-86399)
+makeSecondsTimestamp = (saveTime.hour*3600) + (saveTime.minute * 60) + saveTime.second
+# get system timezone, UTC offset
+sysTimezone = (saveTime.astimezone().utcoffset().seconds) / 36
+# format system timezone offset to hhmm
+tzHalfHourValue = abs(sysTimezone) % 100 # see if UTC offset has minutes
+if tzHalfHourValue:
+	tzHalfHourValue = int(tzHalfHourValue * 0.6) # convert seconds to mm in hhmm
+	sysTimezone = int(sysTimezone / 100) * 100 + tzHalfHourValue * (sysTimezone > 0) - tzHalfHourValue * (sysTimezone < 0)
+	#           = ------------ hh -------------  --------- +mm if positive ---------   --------- -mm if negative ---------
+# leading zeroes
+sysTimezone = int(sysTimezone)
+if sysTimezone < 0:
+	sysTimezone = f"{sysTimezone:05d}" # -0800 (sign counts for leading zero)
+else:
+	sysTimezone = f"{sysTimezone:04d}" # 1000
+
+# make dateString (utc0.yyyy.mm.dd.sssss)
+dateString = f"{sysTimezone}.{saveTime.year:04}.{saveTime.month:02}.{saveTime.day:02}.{makeSecondsTimestamp:05}"
+
+fileNameScriptOut = f"{fileNameMa}_cmdPrint.{dateString}.py"
+
+
+outFile = open(f"{fileRootPathMa}/{fileNameScriptOut}","x")
+# x, not w, because w will overrite existing files, while x will only make new ones
+# also longPath used, relative path would require os.chdir(), depends on how you want to go about doing this
+
+fileTextHeader = [
+	"# scripterStu: start print\n",
+	f"# date created: UTC {sysTimezone} {saveTime.year:04}.{saveTime.month:02}.{saveTime.day:02} {saveTime.hour:02d}{saveTime.minute:02d}HRS \n",
+	"# original file location: \n",
+	f"#\t{fileRootPathMa}/{fileNameMa}\n\n",
+	"import maya.cmds as mc\n",
+	"import maya.api.OpenMaya as om2\n\n",
+	"activeSelection = om2.MGlobal.getActiveSelectionList()\n\n",
+	"# create nodes\n",
+	f"nodeList = list(range({len(checkList)}))\n"
+]
+
+"""
 print("\n# scripterStu: start print\n")
 
 print("import maya.cmds as mc")
@@ -225,6 +272,7 @@ print("activeSelection = om2.MGlobal.getActiveSelectionList()")
 
 print("\n# create nodes\n")
 print(f"nodeList = list(range({len(checkList)}))\n")
+"""
 
 for printOut in nodeList:
 	print(printOut)
