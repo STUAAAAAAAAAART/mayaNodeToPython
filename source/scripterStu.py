@@ -81,7 +81,7 @@ nodeTypeSkip = [ # list
 
 
 nodeTypeFilterOut = [ # list
-	# other constrain types specifiec in maya; skip
+	# other constrain types specified in maya; skip
 	'normalConstraint', 'dynamicConstraint', 'pointOnPolyConstraint', 'rigidConstraint', 'symmetryConstraint', 'tangentConstraint', 
 	# skinning nodes, apply in-scene or elsewhere; skip
 	'skinCluster', 'cluster', 'clusterFlexorShape', 'clusterHandle', 'jointCluster', 'jointClusterManip'
@@ -104,7 +104,7 @@ for node in checkList:
 			# this might be a bit too complex to cover all possible cases, probably TODO improve this as needed
 		
 		# oh my god, every constraint command has exclusive flags
-		# also the constrain commands create a user 
+		# also the constrain commands create a user-defined attribute
 
 		# query number of targets
 		
