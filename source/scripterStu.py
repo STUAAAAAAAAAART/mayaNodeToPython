@@ -1,5 +1,57 @@
+from datetime import datetime as dt
+
 import maya.cmds as mc
 import maya.api.OpenMaya as om2
+
+# ====== file preparation
+# do file handling just in case there's a file creation error before doing all the maya node combing
+
+# target outFile to save next to maya scene file location
+fileNameMa = mc.file(q=True, sn=True, shn=True)
+fileRootPathMa = mc.file(q=True, sn = True)[: -(len(fileNameMa))]
+# example output: D:/Folder01/project03/
+# os.getcwd() does not update in maya when an other file is opened
+
+saveTime = dt.now()
+# get timestamp in current day (24h not unix, 0-86399)
+makeSecondsTimestamp = (saveTime.hour*3600) + (saveTime.minute * 60) + saveTime.second
+
+# get system timezone, UTC offset
+sysTimezone = (saveTime.astimezone().utcoffset().seconds) / 36
+# format system timezone offset to hhmm
+tzHalfHourValue = abs(sysTimezone) % 100 # see if UTC offset has minutes
+if tzHalfHourValue:
+	tzHalfHourValue = int(tzHalfHourValue * 0.6) # convert seconds to mm in hhmm
+	sysTimezone = int(sysTimezone / 100) * 100 + tzHalfHourValue * (sysTimezone > 0) - tzHalfHourValue * (sysTimezone < 0)
+	#           = ------------ hh -------------  --------- +mm if positive ---------   --------- -mm if negative ---------
+# leading zeroes
+sysTimezone = int(sysTimezone)
+if sysTimezone < 0:
+	sysTimezone = f"{sysTimezone:05d}" # -0800 (sign counts for leading zero)
+else:
+	sysTimezone = f"{sysTimezone:04d}" # 1000
+
+# make dateString (utc0.yyyy.mm.dd.sssss)
+dateString = f"{sysTimezone}.{saveTime.year:04}.{saveTime.month:02}.{saveTime.day:02}.{makeSecondsTimestamp:05}"
+
+# filename:
+fileNameScriptOut = f"{fileNameMa}_cmdPrint.{dateString}.py"
+
+outfile = None
+try:
+	outFile = open(f"{fileRootPathMa}/{fileNameScriptOut}","x")
+	# x, not w, because w will overrite existing files, while x will only make new ones
+	# also longPath used, relative path would require os.chdir(), depends on how you want to go about doing this
+except:
+	import os
+	if os.stat(f"{fileRootPathMa}/{fileNameScriptOut}").st_size == 0:
+		# open and overwrite, if existing file is 0 bytes
+		outFile = open(f"{fileRootPathMa}/{fileNameScriptOut}","w")
+	else:
+		# there is somehow a file made with the same name down to the second, with existing data
+		raise FileExistsError(f"File exists and not empty: {fileNameScriptOut}")
+# ====== file name ready
+
 
 activeSelection: om2.MSelectionList = om2.MGlobal.getActiveSelectionList()
 
@@ -212,75 +264,36 @@ for node in checkList:
 	# next node
 	nodeCounter += addToCounter
 
-# print phase: print all commands for creation and connections
-# TODO: write text to file
 
 
-fileNameMa = mc.file(q=True, sn=True, shn=True)
-fileRootPathMa = mc.file(q=True, sn = True)[: -(len(fileNameMa))]
-# example output: D:/Folder01/project03/
-# os.getcwd() does not update in maya when an other file is opened
+# ======= start write operation
 
-from datetime import datetime as dt
-saveTime = dt.now()
-# get timestamp in current day (24h not unix, 0-86399)
-makeSecondsTimestamp = (saveTime.hour*3600) + (saveTime.minute * 60) + saveTime.second
-# get system timezone, UTC offset
-sysTimezone = (saveTime.astimezone().utcoffset().seconds) / 36
-# format system timezone offset to hhmm
-tzHalfHourValue = abs(sysTimezone) % 100 # see if UTC offset has minutes
-if tzHalfHourValue:
-	tzHalfHourValue = int(tzHalfHourValue * 0.6) # convert seconds to mm in hhmm
-	sysTimezone = int(sysTimezone / 100) * 100 + tzHalfHourValue * (sysTimezone > 0) - tzHalfHourValue * (sysTimezone < 0)
-	#           = ------------ hh -------------  --------- +mm if positive ---------   --------- -mm if negative ---------
-# leading zeroes
-sysTimezone = int(sysTimezone)
-if sysTimezone < 0:
-	sysTimezone = f"{sysTimezone:05d}" # -0800 (sign counts for leading zero)
-else:
-	sysTimezone = f"{sysTimezone:04d}" # 1000
-
-# make dateString (utc0.yyyy.mm.dd.sssss)
-dateString = f"{sysTimezone}.{saveTime.year:04}.{saveTime.month:02}.{saveTime.day:02}.{makeSecondsTimestamp:05}"
-
-fileNameScriptOut = f"{fileNameMa}_cmdPrint.{dateString}.py"
-
-
-outFile = open(f"{fileRootPathMa}/{fileNameScriptOut}","x")
-# x, not w, because w will overrite existing files, while x will only make new ones
-# also longPath used, relative path would require os.chdir(), depends on how you want to go about doing this
-
-fileTextHeader = [
+fileEnumerator = [
 	"# scripterStu: start print\n",
 	f"# date created: UTC {sysTimezone} {saveTime.year:04}.{saveTime.month:02}.{saveTime.day:02} {saveTime.hour:02d}{saveTime.minute:02d}HRS \n",
 	"# original file location: \n",
 	f"#\t{fileRootPathMa}/{fileNameMa}\n\n",
 	"import maya.cmds as mc\n",
 	"import maya.api.OpenMaya as om2\n\n",
-	"activeSelection = om2.MGlobal.getActiveSelectionList()\n\n",
-	"# create nodes\n",
-	f"nodeList = list(range({len(checkList)}))\n"
+	"activeSelection = om2.MGlobal.getActiveSelectionList()\n"	
 ]
 
-"""
-print("\n# scripterStu: start print\n")
-
-print("import maya.cmds as mc")
-print("import maya.api.OpenMaya as om2\n")
-
-print("activeSelection = om2.MGlobal.getActiveSelectionList()")
-
-print("\n# create nodes\n")
-print(f"nodeList = list(range({len(checkList)}))\n")
-"""
-
+fileEnumerator.append("\n# create nodes\n")
+fileEnumerator.append(f"nodeList = list(range({len(checkList)}))\n")
 for printOut in nodeList:
-	print(printOut)
-print("\n# custom attributes\n")
-for printOut in addAttrList:
-	print(printOut)
-print("\n# connect attributes\n")
-for printOut in connectionList:
-	print(printOut)
+	fileEnumerator.append(f"{printOut}\n")
 
-print(f"\n# scripterStu: print done\n")
+fileEnumerator.append("\n# custom attributes\n")
+for printOut in addAttrList:
+	fileEnumerator.append(f"{printOut}\n")
+
+fileEnumerator.append("\n# connect attributes\n")
+for printOut in connectionList:
+	fileEnumerator.append(f"{printOut}\n")
+
+fileEnumerator.append("\n\n# end of script\n")
+
+
+outFile.writelines(fileEnumerator)
+outFile.close()
+print(f"\n# scripterStu: print done: {fileRootPathMa}/{fileNameScriptOut}")
