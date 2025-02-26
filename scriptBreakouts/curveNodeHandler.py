@@ -3,14 +3,24 @@ import maya.api.OpenMaya as om2
 
 """
 required reference
+https://help.autodesk.com/view/MAYAUL/2022/ENU/?guid=__Nodes_index_html
 https://help.autodesk.com/view/MAYAUL/2024/ENU/?guid=MAYA_API_REF_py_ref_class_open_maya_1_1_m_fn_nurbs_curve_html
 https://help.autodesk.com/view/MAYAUL/2023/ENU/?guid=MAYA_API_REF_py_ref_class_open_maya_1_1_m_point_html
 https://help.autodesk.com/cloudhelp/ENU/MayaCRE-Tech-Docs/CommandsPython/curve.html
 
+https://groups.google.com/g/python_inside_maya/c/83qbnDIQKuw
 
 maya.cmds command:
 
-mc.curve()
+mc.curve() # returns the transform node, do subsequent commands to grab curve shape node
+
+DG: nurbsCurve.cc
+Cached curve Defines geometry of the curve. The properties are defined in this order:
+First line: degree, number of spans, form (0=open, 1=closed, 2=periodic), rational (yes/no), dimension
+Second line: number of knots, list of knot values
+Third line: number of CVs
+Fourth and later lines: CV positions in x,y,z (and w if rational) 
+
 """
 
 activeSelection: om2.MSelectionList = om2.MGlobal.getActiveSelectionList()
