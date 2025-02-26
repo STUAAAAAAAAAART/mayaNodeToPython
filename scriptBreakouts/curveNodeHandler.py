@@ -1,6 +1,18 @@
 import maya.cmds as mc
 import maya.api.OpenMaya as om2
 
+"""
+required reference
+https://help.autodesk.com/view/MAYAUL/2024/ENU/?guid=MAYA_API_REF_py_ref_class_open_maya_1_1_m_fn_nurbs_curve_html
+https://help.autodesk.com/view/MAYAUL/2023/ENU/?guid=MAYA_API_REF_py_ref_class_open_maya_1_1_m_point_html
+https://help.autodesk.com/cloudhelp/ENU/MayaCRE-Tech-Docs/CommandsPython/curve.html
+
+
+maya.cmds command:
+
+mc.curve()
+"""
+
 activeSelection: om2.MSelectionList = om2.MGlobal.getActiveSelectionList()
 checkList = activeSelection.getSelectionStrings()
 
@@ -12,7 +24,15 @@ mc.listAttr()
 
 checkList: om2.MSelectionList = om2.MSelectionList().add("curveShape1")
 getCurve = om2.MFnNurbsCurve(checkList.getDependNode(0))
+
+testSpanCount = getCurve.numSpans # number of spans of curve
+# number of EPs = number of spans, +1 IF curve is closed (i.e. last point connects to first point)
+# spans are the curve segments between two points, EPs are points
+
 testPoint = getCurve.getPointAtParam(1) # curve param query, returns om2.MPoint
+# this returns position relative to object transform, not world transform
+# [x,y,z,w]
+
 print(list(testPoint)) # MPoint has a type-casting binding to convert to list or tuples
 # TODO: is this possible with maths, to convert CVs to EPs?
 
@@ -26,6 +46,9 @@ print(list(testPoint)) # MPoint has a type-casting binding to convert to list or
 # these are your edit points
 
 # get core curve definitions (degree/bezier, closed/open/periodic, componentVisibility, curveDisplayColour...)
+# get transforms
+# get all user-defined attributes
+
 
 newCurve = [
     mc.createNode("transform", n="curveStu0"),
