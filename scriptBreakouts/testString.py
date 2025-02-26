@@ -11,7 +11,7 @@ cmds.setAttr('myNurbsCurveShape.cc',
 	(2,-3,0),
 	(-2,-1,0),
 	type='nurbsCurve'
-    )
+	)
 """
 
 """
@@ -50,27 +50,103 @@ melString = ['\tsetAttr ".ws[0]" -type "nurbsCurve" ', '\t\t3 6 0 no 3', '\t\t11
 """
 
 melString = [
-    '\tsetAttr ".ws[0]" -type "nurbsCurve" ',
-    '\t\t3 6 0 no 3',
-    '\t\t11 0 0 0 1 2 3 4 5 6 6 6',
-    '\t\t9',
-    '\t\t-2.0000000000001679 5 13.00000000000019',
-    '\t\t-3.5393162393164861 5 9.4111111111112198',
-    '\t\t-6.6179487179490444 5 2.2333333333332837',
-    '\t\t4.4717948717950335 5 -3.9333333333333247',
-    '\t\t12.730769230769258 5 -4.5000000000000782',
-    '\t\t-1.3948717948718699 5 9.93333333333333',
-    '\t\t10.848717948718051 5 18.76666666666673',
-    '\t\t11.616239316239362 5 9.5888888888889348',
-    '\t\t11.999999999999996 5 5',
-    '\t\t;'
-    ]
+	'\tsetAttr ".ws[0]" -type "nurbsCurve" ', # toss
+	'\t\t3 6 0 no 3', # index 0
+	'\t\t11 0 0 0 1 2 3 4 5 6 6 6', # pop 0th and hold, append rest as list element 
+	'\t\t9', #append normally
+	'\t\t-2.0000000000001679 5 13.00000000000019', # append each as triples
+	'\t\t-3.5393162393164861 5 9.4111111111112198',
+	'\t\t-6.6179487179490444 5 2.2333333333332837',
+	'\t\t4.4717948717950335 5 -3.9333333333333247',
+	'\t\t12.730769230769258 5 -4.5000000000000782',
+	'\t\t-1.3948717948718699 5 9.93333333333333',
+	'\t\t10.848717948718051 5 18.76666666666673',
+	'\t\t11.616239316239362 5 9.5888888888889348',
+	'\t\t11.999999999999996 5 5',
+	'\t\t;' # toss
+	]
 
 melString.pop() # don't need the last bit
 melString.pop(0) # don't need the MEL command
 for i in range(len(melString)):
-    melString[i].replace("\t",'')
+	melString[i].replace("\t",'')
 
+
+melString[0] = melString[0].split(' ')
+
+for i in range(len(melString[0])):
+	try:
+		melString[0][i] = int(melString[0][i])
+	except:
+		if melString[0][i] == "yes":
+			melString[0][i] = True
+		elif melString[0][i] == "no":
+			melString[0][i] = False
+		else:
+			raise ValueError("problems parsing info string into int and bool")
+melString[1] = melString[1].split(' ')
+melStringKnotCount = int(melString.pop(0)) # remove knot count
+for i in range(len(melString[1])):
+	melString[1][i] = int(melString[1][i])
+	# raise default error if this can't be parsed
+
+buildList = []
+
+buildList += melString[0] # basic info
+buildList.append(melString[1]) # knot data [0,0,0,1,1,1,2,2,2...]
+buildList += [melStringKnotCount, int(melString[2])] # number of knots, number of CVs
+
+melStringCvs = melString[3:]
+
+for cv in range(len(melStringCvs)):
+	# triples now
+	melStringCvs[cv] = melStringCvs[cv].split(' ')
+	for i in range(len(cv)):
+		melStringCvs[cv][i] = float(melStringCvs[cv][i])
+		# raise default error if this can't be parsed
+buildList += melStringCvs
+
+# ==============
+"""
+MEL to python command parser, but in string form
+"""
+melString = [
+	'\tsetAttr ".ws[0]" -type "nurbsCurve" ', # toss
+	'\t\t3 6 0 no 3', # index 0
+	'\t\t11 0 0 0 1 2 3 4 5 6 6 6', # pop 0th and hold, append rest as list element 
+	'\t\t9', #append normally
+	'\t\t-2.0000000000001679 5 13.00000000000019', # append each as triples
+	'\t\t-3.5393162393164861 5 9.4111111111112198',
+	'\t\t-6.6179487179490444 5 2.2333333333332837',
+	'\t\t4.4717948717950335 5 -3.9333333333333247',
+	'\t\t12.730769230769258 5 -4.5000000000000782',
+	'\t\t-1.3948717948718699 5 9.93333333333333',
+	'\t\t10.848717948718051 5 18.76666666666673',
+	'\t\t11.616239316239362 5 9.5888888888889348',
+	'\t\t11.999999999999996 5 5',
+	'\t\t;' # toss
+	]
+
+melString.pop() # don't need the last bit
+melString.pop(0) # don't need the MEL command
+
+for i in range(len(melString)):
+	melString[i].replace("\t",'')
+
+melString[0].replace("yes", "True")
+melString[0].replace("no", "False")
+
+melString[0].replace(' ', ", ")
+
+	# '11 0 0 0 1 2 3 4 5 6 6 6'
+melStringKnots = melString[1].split(' ', maxsplit=1)
+	# ['11', '0 0 0 1 2 3 4 5 6 6 6']
+melStringKnots[1].replace(' ', ', ')
+	# ['11', '0, 0, 0, 1, 2, 3, 4, 5, 6, 6, 6']
+melStringKnots[1] = f"[{melStringKnots[1]}]"
+	# ['11', '[0, 0, 0, 1, 2, 3, 4, 5, 6, 6, 6]']
+melString[1] = f"{melStringKnots[1]}, {melStringKnots[0]}"
+	# '[0, 0, 0, 1, 2, 3, 4, 5, 6, 6, 6], 11'
 
 # ==============
 """
@@ -80,17 +156,17 @@ python nurbsCurve data constructor
 buildList = []
 curveKnots = [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4]
 cvList = [
-    (-8, 0, 9), (-13, 0, 7), (-14, 0, -4), (-9, 0, -7), (-4, 0, -10), (0, 0, -5), (0, 0, 0),(0, 0, 5), (3, 0, 10), (7, 0, 8), (11, 0, 6), (14, 0, -5), (9, 0, -9)
+	(-8, 0, 9), (-13, 0, 7), (-14, 0, -4), (-9, 0, -7), (-4, 0, -10), (0, 0, -5), (0, 0, 0),(0, 0, 5), (3, 0, 10), (7, 0, 8), (11, 0, 6), (14, 0, -5), (9, 0, -9)
 ]
 # list of tuple triples; all are position vectors relative to object space
 
 
 buildList += [
-    3, # degree
-    10, # number of spans
-    0, # form (0=open, 1=closed, 2=periodic)
+	3, # degree
+	10, # number of spans
+	0, # form (0=open, 1=closed, 2=periodic)
 	False, # rational (True/False)
-    3 # dimension
+	3 # dimension
 ]
 buildList.append(curveKnots) # curve knot values
 buildList.append( len(curveKnots) ) # number of curve knots
