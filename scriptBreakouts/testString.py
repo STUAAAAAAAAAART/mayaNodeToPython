@@ -69,7 +69,7 @@ melString = [
 melString.pop() # don't need the last bit
 melString.pop(0) # don't need the MEL command
 for i in range(len(melString)):
-	melString[i].replace("\t",'')
+	melString[i] = melString[i].replace("\t",'')
 
 
 melString[0] = melString[0].split(' ')
@@ -85,7 +85,7 @@ for i in range(len(melString[0])):
 		else:
 			raise ValueError("problems parsing info string into int and bool")
 melString[1] = melString[1].split(' ')
-melStringKnotCount = int(melString.pop(0)) # remove knot count
+melStringKnotCount = int(melString[1].pop(0)) # remove knot count
 for i in range(len(melString[1])):
 	melString[1][i] = int(melString[1][i])
 	# raise default error if this can't be parsed
@@ -94,14 +94,14 @@ buildList = []
 
 buildList += melString[0] # basic info
 buildList.append(melString[1]) # knot data [0,0,0,1,1,1,2,2,2...]
-buildList += [melStringKnotCount, int(melString[2])] # number of knots, number of CVs
+buildList += [int(melString[2]), melStringKnotCount] # number of knots, number of CVs
 
 melStringCvs = melString[3:]
 
 for cv in range(len(melStringCvs)):
 	# triples now
 	melStringCvs[cv] = melStringCvs[cv].split(' ')
-	for i in range(len(cv)):
+	for i in range(len(melStringCvs[cv])):
 		melStringCvs[cv][i] = float(melStringCvs[cv][i])
 		# raise default error if this can't be parsed
 buildList += melStringCvs
@@ -127,26 +127,45 @@ melString = [
 	'\t\t;' # toss
 	]
 
+
 melString.pop() # don't need the last bit
 melString.pop(0) # don't need the MEL command
 
+# REMINDER: STRINGS ARE IMMUTABLE
+
 for i in range(len(melString)):
-	melString[i].replace("\t",'')
+	melString[i] = melString[i].replace("\t",'') # strip all indents
 
-melString[0].replace("yes", "True")
-melString[0].replace("no", "False")
-
-melString[0].replace(' ', ", ")
+melString[0] = melString[0].replace("yes", "True")
+melString[0] = melString[0].replace("no", "False")
+melString[0] = melString[0].replace(' ', ", ")
+melString[0] += ", "
 
 	# '11 0 0 0 1 2 3 4 5 6 6 6'
 melStringKnots = melString[1].split(' ', maxsplit=1)
 	# ['11', '0 0 0 1 2 3 4 5 6 6 6']
-melStringKnots[1].replace(' ', ', ')
+melStringKnots[1] = melStringKnots[1].replace(' ', ', ')
 	# ['11', '0, 0, 0, 1, 2, 3, 4, 5, 6, 6, 6']
 melStringKnots[1] = f"[{melStringKnots[1]}]"
 	# ['11', '[0, 0, 0, 1, 2, 3, 4, 5, 6, 6, 6]']
-melString[1] = f"{melStringKnots[1]}, {melStringKnots[0]}"
+melString[1] = f"{melStringKnots[1]}, {melStringKnots[0]}, "
 	# '[0, 0, 0, 1, 2, 3, 4, 5, 6, 6, 6], 11'
+
+melString[2] += ', ' # CV count
+
+for i in range(len(melString) -3):
+	# "-2.0000000000001679 5 13.00000000000019"
+	melString[i+3] = melString[i+3].replace(' ', ", ")
+	# "-2.0000000000001679, 5, 13.00000000000019"
+	melString[i+3] = f"[{melString[i+3]}], "
+	# "[-2.0000000000001679, 5, 13.00000000000019], "
+melString[-1] = melString[-1].replace("], " , "]") # remove comma from end of last item
+
+buildString = ""
+for line in melString:
+	buildString += line
+
+print(buildString)
 
 # ==============
 """
