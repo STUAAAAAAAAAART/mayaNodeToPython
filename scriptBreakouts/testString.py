@@ -1,3 +1,6 @@
+import maya.cmds as mc
+import maya.api.OpenMaya as om2
+
 """
 THANK YOU John Creson
 https://groups.google.com/g/python_inside_maya/c/83qbnDIQKuw
@@ -193,3 +196,18 @@ buildList.append( len(cvList)) # number of CVs
 buildList += cvList # CV positions
 
 
+checkList: om2.MSelectionList = om2.MSelectionList()
+checkList.add("multMatrix1")
+checkList.add("curve1")
+checkList.add("bezier1")
+checkList.add("curveShape1")
+checkList.add("bezierShape1")
+checkList.add("bezierShape1.worldSpace")
+
+for i in range(6):
+	print(checkList.getDependNode(i).apiTypeStr) # returns k[NodeType], MPlugs only return owner's DG node (i.e. for node.attr, returns node)
+	# https://help.autodesk.com/view/MAYAUL/2024/ENU/?guid=MAYA_API_REF_py_ref_class_open_maya_1_1_m_fn_html
+
+# to check node type:
+om2.MSelectionList.getDependNode().apiTypeStr
+# to check if plug is of datatype
