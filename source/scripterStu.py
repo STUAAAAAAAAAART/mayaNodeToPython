@@ -57,7 +57,12 @@ activeSelection: om2.MSelectionList = om2.MGlobal.getActiveSelectionList()
 
 # detection phase: get all connections strictly within selection
 
-checkList = activeSelection.getSelectionStrings() # -> list : ["shortName", ... ]
+checkList : list = activeSelection.getSelectionStrings() # -> list : ["shortName", ... ]
+
+nodeTypeShapeNodes = [ # list
+	# currently supported shapes for re-creation
+	"bezierCurve", "nurbsCurve"
+	]
 
 nodeTypeUseCommandsConstraint = [ # list
 	# the usual constraints
@@ -79,7 +84,6 @@ nodeTypeSkip = [ # list
 	'ikEffector' # node created with IK nodes, rarely does the need to adjust them arise
 ]
 
-
 nodeTypeFilterOut = [ # list
 	# other constrain types specified in maya; skip
 	'normalConstraint', 'dynamicConstraint', 'pointOnPolyConstraint', 'rigidConstraint', 'symmetryConstraint', 'tangentConstraint', 
@@ -92,6 +96,8 @@ nodeTypeFilterOut = [ # list
 selectionList = []
 nodeList = []
 constructorList = []
+parentList = [] # [ [child from nodeList , parent from file ] , ...]
+jointList = []
 addAttrList = []
 connectionList = []
 nodeCounter = 0
@@ -118,6 +124,45 @@ for node in checkList:
 		nodeList.append(f"mc.{thisNodeType}('!!SELECT PARENT HERE','{stu_constraintChild}', n='{node}' , maintainOffset=False)")
 		# mc.command(selection) # e.g. [parent,child]
 		pass
+	elif thisNodeType in nodeTypeShapeNodes or thisNodeType == "transform":
+		"""
+		CAUTION: now dealing with DAG paths with relative names and parenting hierachy
+		"""
+		transformAndShape = [None, None]
+		if thisNodeType == "transform":
+			transformAndShape[0] = node
+			# f'mc.createNode("transform", n="{NAME}"", p="{parentName}") # '
+			# f'mc.createNode("{shape}", n="{NAME}"", p="{transformNode}")'
+		elif thisNodeType in nodeTypeShapeNodes:
+			transformAndShape[1] = node
+		# pre-prepare handlers with [transform , shape]
+		# end up with mc.create()s for transform and shape separately
+		# if thisNode is a shape
+			# get transform node now
+		# if this transform node has already been processed
+			# skip createnode command for the transform
+
+		# get parent transform (selection string index)
+		# if transform already exist earlier in the list
+			# get name and skip
+			# else handle now and pop from list
+
+		# print commands
+			# warning: createNode(shape) only returns the name of the shape node, and does not return the transform node,
+			# so make the transform node command first so that the script has a point for the transform
+		pass
+	elif thisNodeType == "joint":
+		# script-only: return name of joints
+		"""
+		normally work would be done upon an existing skinned model with joints
+		the exceptions would be with copying driver/utility joints, but those should be scripted separately
+
+		see also the duplicate hierachy script
+		"""
+		# add to jointList
+		# add to nodeList (for completion's sake)
+		# f'"{node}" # mc.createNode("joint", n={NAME}, p={parentName})'
+		pass	
 	elif thisNodeType == 'ikHandle': # ikHandle, use dedicated command
 		['ikRPsolver', 'ikSCsolver', 'ikSplineSolver']
 		# query start joint
@@ -282,6 +327,8 @@ fileEnumerator.append("\n# create nodes\n")
 fileEnumerator.append(f"nodeList = list(range({len(checkList)}))\n")
 for printOut in nodeList:
 	fileEnumerator.append(f"{printOut}\n")
+
+fileEnumerator.append("\n# shape nodes\n")
 
 fileEnumerator.append("\n# custom attributes\n")
 for printOut in addAttrList:
