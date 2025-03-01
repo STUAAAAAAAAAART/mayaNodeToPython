@@ -35,7 +35,7 @@ else:
 dateString = f"{sysTimezone}.{saveTime.year:04}.{saveTime.month:02}.{saveTime.day:02}.{makeSecondsTimestamp:05}"
 
 # filename:
-fileNameScriptOut = f"{fileNameMa}_cmdPrint.{dateString}.py"
+fileNameScriptOut = f"{fileNameMa}_print.{dateString}.py"
 
 outfile = None
 try:
@@ -126,16 +126,23 @@ for node in checkList:
 		pass
 	elif thisNodeType in nodeTypeShapeNodes or thisNodeType == "transform":
 		"""
-		CAUTION: now dealing with DAG paths with relative names and parenting hierachy
+		CAUTION0: now dealing with DAG paths with relative names and parenting hierachy
+		CAUTION1: now dealing with object instancing, which means many transform nodes can share a single shape node
 		"""
+		# pre-prepare handlers with [transform , shape]
 		transformAndShape = [None, None]
 		if thisNodeType == "transform":
 			transformAndShape[0] = node
+			# find shape node
+			thisNodeShapes = mc.listRelatives(n=node, s=True)
+			
 			# f'mc.createNode("transform", n="{NAME}"", p="{parentName}") # '
 			# f'mc.createNode("{shape}", n="{NAME}"", p="{transformNode}")'
 		elif thisNodeType in nodeTypeShapeNodes:
 			transformAndShape[1] = node
-		# pre-prepare handlers with [transform , shape]
+			# find transform node
+			# CAUTION: object instancing means multiple transforms can share same shape node
+		
 		# end up with mc.create()s for transform and shape separately
 		# if thisNode is a shape
 			# get transform node now
