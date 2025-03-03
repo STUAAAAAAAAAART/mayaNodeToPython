@@ -128,6 +128,13 @@ for node in checkList:
 		"""
 		CAUTION0: now dealing with DAG paths with relative names and parenting hierachy
 		CAUTION1: now dealing with object instancing, which means many transform nodes can share a single shape node
+		
+		stuff to end up with:
+		- transform node
+		- transform attributes
+		- shape node
+		- shape data
+		- shape node attributes (just in case)
 		"""
 		# pre-prepare handlers with [transform , shape]
 		transformAndShape = [None, None]
