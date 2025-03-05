@@ -99,10 +99,20 @@ constructorList = []
 parentList = [] # [ [child from nodeList , parent from file ] , ...]
 jointList = []
 addAttrList = []
+setAttrList = []
 connectionList = []
 nodeCounter = 0
+skipList = [] # for instances like transform nodes where it has already been processed
+
 for node in checkList:
+	if node in skipList:
+		# node found in skipList, possibly processed in advance
+		skipList.pop(skipList.index(node)) # remove from skiplist to make searching tiny bit quicker
+		continue
+
 	addToCounter = 1
+
+	nodesForAttrList = []
 	# ============= write createNode / creation commands
 	thisNodeType = mc.nodeType(node)
 	if thisNodeType in nodeTypeUseCommandsConstraint: # constraints, use dedicated commands
@@ -123,12 +133,14 @@ for node in checkList:
 
 		nodeList.append(f"mc.{thisNodeType}('!!SELECT PARENT HERE','{stu_constraintChild}', n='{node}' , maintainOffset=False)")
 		# mc.command(selection) # e.g. [parent,child]
+		nodesForAttrList.append(node) # handoff to stage 2 
 		pass
-	elif thisNodeType in nodeTypeShapeNodes or thisNodeType == "transform":
+
+	elif thisNodeType in ["nurbsCurve", "bezierCurve"] or thisNodeType == "transform": # nurbsCurve and general transforms
 		"""
 		CAUTION0: now dealing with DAG paths with relative names and parenting hierachy
 		CAUTION1: now dealing with object instancing, which means many transform nodes can share a single shape node
-		
+
 		stuff to end up with:
 		- transform node
 		- transform attributes
@@ -136,34 +148,146 @@ for node in checkList:
 		- shape data
 		- shape node attributes (just in case)
 		"""
-		# pre-prepare handlers with [transform , shape]
-		transformAndShape = [None, None]
+		# pre-prepare handlers with [[transform/s,... ] , shape]
+		transformAndShape = [[], None]
+		thisShapeType = ""
+
+		# if node is transform; current state: [[], None] 
 		if thisNodeType == "transform":
-			transformAndShape[0] = node
-			# find shape node
-			thisNodeShapes = mc.listRelatives(n=node, s=True)
-			
-			# f'mc.createNode("transform", n="{NAME}"", p="{parentName}") # '
-			# f'mc.createNode("{shape}", n="{NAME}"", p="{transformNode}")'
-		elif thisNodeType in nodeTypeShapeNodes:
+			# get shape
+			thisNodeShapes = mc.listRelatives(n=node, s=True, ni=True)
+			# if has shapes:
+			if len(thisNodeShapes) > 0:
+				thisShapeType = mc.nodeType(thisNodeShapes[0])
+				# set transformAndShape[1]
+				transformAndShape[1] = thisNodeShapes[0]
+				# end up with [[], shape]
+			# if no shapes:
+			else:
+				transformAndShape[0].append(node)
+				# end up with [[node], None]
+
+		# if node is curve shapes: current state if not transform: [[], None]
+		if thisNodeType in ["nurbsCurve, bezierCurve"]:
+			thisShapeType = thisNodeType
 			transformAndShape[1] = node
-			# find transform node
-			# CAUTION: object instancing means multiple transforms can share same shape node
+			# end up with [[], shape]
+		"""
+		possible states:
+		- [[], shape] ; has valid shape node
+		- [[node], None] ; only transform
+		"""
+		# enumerate transform nodes if there is a shape
+		if transformAndShape[1]:
+			transformAndShape[0] = mc.listRelatives(transformAndShape[1], ap=True) # list
+			# first item in list is original object, subsequent are instances
 		
-		# end up with mc.create()s for transform and shape separately
-		# if thisNode is a shape
-			# get transform node now
-		# if this transform node has already been processed
-			# skip createnode command for the transform
+		# recast transform list to MSL just in case (going to use this for checking re-encounters with skipList)
+		listGetSel : om2.MSelectionList = om2.MSelectionList()
+		for i in transformAndShape[0]:
+			listGetSel.add(i)
+		transformAndShape[0] = list(listGetSel.getSelectionStrings())
+		listGetSel.clear()
+		del listGetSel
+		
+		"""
+		possible states:
+		- [[node], shape] ; transforms and instances, has valid shape node
+		- [[node], None] ; only transform
+		"""
+		# don't check for list duplicates here: this branch will grab all relevant transform and/or shape relatives at once, and processes them in proper order
+			# if a node (that has already been processed) is encountered down the checkList, it would be caught at the top of this if-tree before it ever reaches here
+		
+		# enumerate first transform
+		getParent = mc.listRelatives(transformAndShape[0][0])
+		if getParent:
+			getParent = [f'p="{getParent[0]}"', getParent[0]]
+		else:
+			getParent = ['',''] # None cast to string is the word 'None' -_-
+		nodeList.append(f'nodeList[{nodeCounter}] = mc.createNode("transform", n="{transformAndShape[0][0]}", {getParent[0]}, skipSelect = True) # parented under: {getParent[1]}')
+		#                 nodeList[n]             = mc.createNode("transform", n="nName"                    , p="parent"    , skipSelect = True)
 
-		# get parent transform (selection string index)
-		# if transform already exist earlier in the list
-			# get name and skip
-			# else handle now and pop from list
+		# enumerate shape node
+		if transformAndShape[1]:
+			shapeCommand = []
+			shapeCommand.append(f'nodeList[{nodeCounter+1}] = mc.createNode({thisShapeType}, n="{transformAndShape[1]}", p="{transformAndShape[0][0]}", skipSelect = True)')
+			#                     nodeList[n]               = mc.createNode("nurbsCurve"   , n="shapeName"             , P="transformName",             skipSelect = True)
+			addToCounter += 1 # shape node
+			if thisShapeType in ["nurbsCurve, bezierCurve"]:
+				# put setAttr(".cc") command here?
+				# ----------------------------------------------------------------------------------------------
+				# time for om2.MPlug.getSetAttrCmds()
+				getShapeMSL : om2.MSelectionList = om2.MSelectionList().add(transformAndShape[1]+".worldSpace")
+				getShapePlug :om2.MPlug = getShapeMSL.getPlug(0)
+				getShapeMSL.clear()
+				del getShapeMSL
+				melString = getShapePlug.getSetAttrCmds() # list of line strings, in MEL
+				melString.pop() # don't need the last bit
+				getShapeDataType = ""
+				# get data type
+				if "dataBezierCurve" in melString[0]:
+					getShapeDataType = "dataBezierCurve"
+				else:
+					getShapeDataType = "nurbsCurve"
+				melString.pop(0) # don't need the MEL command itself
 
-		# print commands
-			# warning: createNode(shape) only returns the name of the shape node, and does not return the transform node,
-			# so make the transform node command first so that the script has a point for the transform
+				for i in range(len(melString)):
+					melString[i] = melString[i].replace("\t",'') # strip all indents
+
+				melString[0] = melString[0].replace("yes", "True")
+				melString[0] = melString[0].replace("no", "False")
+				melString[0] = melString[0].replace(' ', ", ")
+				melString[0] += ", "
+
+					# '11 0 0 0 1 2 3 4 5 6 6 6'
+				melStringKnots = melString[1].split(' ', maxsplit=1)
+					# ['11', '0 0 0 1 2 3 4 5 6 6 6']
+				melStringKnots[1] = melStringKnots[1].replace(' ', ', ')
+					# ['11', '0, 0, 0, 1, 2, 3, 4, 5, 6, 6, 6']
+				melStringKnots[1] = f"[{melStringKnots[1]}]"
+					# ['11', '[0, 0, 0, 1, 2, 3, 4, 5, 6, 6, 6]']
+				melString[1] = f"{melStringKnots[1]}, {melStringKnots[0]}, "
+					# '[0, 0, 0, 1, 2, 3, 4, 5, 6, 6, 6], 11'
+
+				melString[2] += ', ' # CV count
+
+				for i in range(len(melString) -3): # CV triples
+					# "-2.0000000000001679 5 13.00000000000019"
+					melString[i+3] = melString[i+3].replace(' ', ", ")
+					# "-2.0000000000001679, 5, 13.00000000000019"
+					melString[i+3] = f"[{melString[i+3]}], "
+					# "[-2.0000000000001679, 5, 13.00000000000019], "
+				melString[-1] = melString[-1].replace("], " , "]") # remove comma from end of last item
+
+				buildString = ""
+				for line in melString:
+					buildString += line
+
+				# ----------------------------------------------------------------------------------------------
+					
+				shapeCommand.append(f'mc.setAttr(f"{'{'}nodeList[{nodeCounter+1}]{'}'}.cc", {buildString}, type = "{getShapeDataType}")')
+				#                     mc.setAttr(f"  {          nodeList[n]        }.cc",   {curveData}  , type = "nurbsCurve"        )
+				# remember to use the .cc attribute and not the .worldSpace attribute when applying grafted curve data
+			else:
+				# could be polygon mesh or NURBS surface, skip for now
+				# TODO: reconsider for NURBS surface, might have a chance it'd be used as a UV positional control				
+				shapeCommand.append("# check maya scene for shape node type, might be polymesh or NURBS surface")
+		nodeList.append(f"{shapeCommand[0]}\n{shapeCommand[1]}")
+			
+		# enumerate subsequent instances
+		if len(transformAndShape[0]) > 1:
+			for tf in transformAndShape[0][1:]:
+
+		
+		# enumerate subsequent instances
+		# if there is a shape and is one of the curve shapes, enumerate shape command
+			# note that this createNode command should go BEFORE the instance command, just to be sure
+		# script list admin
+			# append all created nodes (except thisNode) into skipList
+			# append all created nodes to stage 2 processing list for connection and attribute handling
+			# note that transform node should have its own override to get transform attribute data and wireframe and outliner colour states
+
+# ///////////////////////////////////////////////////////////////////
 		pass
 	elif thisNodeType == "joint":
 		# script-only: return name of joints
@@ -173,8 +297,38 @@ for node in checkList:
 
 		see also the duplicate hierachy script
 		"""
+		# query joint for any connections
+		getConnectionsInbound = mc.listConnections(node, sh=True, s=True, d=False)
+		getConnectionsOutbound = mc.listConnections(node, sh=True, s=False, d=True)
+		
+		grabNode:om2.MSelectionList = om2.MSelectionList()
+		listInbound = []
+		listOutbound = []
+		for n in getConnectionsInbound:
+			if mc.nodeType(n) == "nodeGraphEditorInfo":
+				continue
+			grabNode.clear()
+			grabNode.add(n)
+			grabNodeSelectionString = grabNode.getSelectionStrings(0)[0]
+			if grabNodeSelectionString in listInbound:
+				continue
+			listInbound.append(grabNodeSelectionString)
+		for n in getConnectionsOutbound:
+			if mc.nodeType(n) == "nodeGraphEditorInfo":
+				continue
+			grabNode.clear()
+			grabNode.add(n)
+			grabNodeSelectionString = grabNode.getSelectionStrings(0)[0]
+			if grabNodeSelectionString in listOutbound:
+				continue
+			listOutbound.append(grabNodeSelectionString)
+
 		# add to jointList
+		jointList.append(f"{node} # incoming: {listInbound} ; outgoing: {listOutbound}")
 		# add to nodeList (for completion's sake)
+		getParent = mc.listRelatives(node, p=True, c=False)[0]
+		jointListIndex = len(jointList)-1
+		nodeList += f"jointList[{jointListIndex}] # joint - {node}"
 		# f'"{node}" # mc.createNode("joint", n={NAME}, p={parentName})'
 		pass	
 	elif thisNodeType == 'ikHandle': # ikHandle, use dedicated command
@@ -218,7 +372,11 @@ for node in checkList:
 		nodeList.append(f'nodeList[{nodeCounter}] = mc.createNode("{thisNodeType}", n="{node}", skipSelect = True)')
 		#                 nodeList[n]             = mc.createNode("nodeType"      , n="nName" , skipSelect = True)
 		# nodeList[n] = mc.createNode("nodeType", n="nName", skipSelect = True)
-		
+
+	"""
+	REFACTOR: iterate through discovered list of nodes from previous step, due to DAG objects and shape/transform node discovery
+	"""
+# still for node in checklist from earlier:
 
 	# ============= check for user-defined attributes and write addAttr commands
 	checkAttrUD = mc.listAttr(node, userDefined=True)
@@ -270,7 +428,7 @@ for node in checkList:
 						# listChildren = True
 						# listSiblings = True
 				addAttrList.append(f'# "{checkAttrType}" type: {node}.{attr}')
-			
+
 	# ============= query outgoing connections
 	if thisNodeType in nodeTypeUseCommandsConstraint:
 		# constraint node override, connections already made
@@ -319,7 +477,9 @@ for node in checkList:
 						
 			# write connectAttr commands
 			connectionList.append(f'mc.connectAttr({fromNode}, {toNode}) # {queryConnections[i+i]} -> {queryConnections[i+i+1]}')
-			
+
+
+
 	# next node
 	nodeCounter += addToCounter
 
@@ -336,6 +496,11 @@ fileEnumerator = [
 	"import maya.api.OpenMaya as om2\n\n",
 	"activeSelection = om2.MGlobal.getActiveSelectionList()\n"	
 ]
+
+fileEnumerator.append("\n# list of joints\n")
+fileEnumerator.append(f"jointList = list(range({len(jointList)}))\n")
+for printOut in jointList:
+	fileEnumerator.append(f"{printOut}\n")
 
 fileEnumerator.append("\n# create nodes\n")
 fileEnumerator.append(f"nodeList = list(range({len(checkList)}))\n")
