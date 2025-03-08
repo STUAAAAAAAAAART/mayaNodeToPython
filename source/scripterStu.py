@@ -110,7 +110,8 @@ skipList = [] # for instances like transform nodes where it has already been pro
 for node in checkList:
 	if node in skipList:
 		# node found in skipList, possibly processed in advance
-		skipList.pop(skipList.index(node)) # remove from skiplist to make searching tiny bit quicker
+		del skipList[skipList.index(node)]
+	#	skipList.pop(skipList.index(node)) # remove from skiplist to make searching tiny bit quicker
 		continue
 
 	addToCounter = 1
@@ -231,14 +232,14 @@ for node in checkList:
 				getShapeMSL.clear()
 				del getShapeMSL
 				melString = getShapePlug.getSetAttrCmds() # list of line strings, in MEL
-				melString.pop() # don't need the last bit
+				del melString[-1] # don't need the last bit
 				getShapeDataType = ""
 				# get data type
 				if "dataBezierCurve" in melString[0]:
 					getShapeDataType = "dataBezierCurve"
 				else:
 					getShapeDataType = "nurbsCurve"
-				melString.pop(0) # don't need the MEL command itself
+				del melString[0] # don't need the MEL command itself
 
 				for i in range(len(melString)):
 					melString[i] = melString[i].replace("\t",'') # strip all indents
@@ -287,9 +288,10 @@ for node in checkList:
 		if len(transformAndShape[0]) > 1: # if there are more than one transform nodes gathered 
 			for tf in transformAndShape[0][1:]: #leave out the first one, it's done above
 				# make instance command
-				# mc.instance( transformAndShape[0][0] , lf=False, st=False)
+				nodeList.append(f"mc.instance( nodeList[{nodeListStage2.index(tf)}], n='{tf}', lf=False, st=False) # instance of {transformAndShape[0][0]}")
+				#                 mc.instance(             nodelist[n]             , n=NAME  , lf=False, st=False)
 				# make reparenting command
-				# mc.parent()
+				# mc.parent() # !!! REPARENTING COMMAND, DOUBLE-CHECK AND EDIT BEFORE RUNNING SCRIPT
 				skipList.append(tf)
 				nodeListStage2.append(tf)
 				addToCounter += 1 # +1 instance
@@ -398,47 +400,126 @@ for node in checkList:
 	"""
 
 # -------------- attribute checking, creation and setting
+checkTransform = ( # transform node
+	('offsetParentMatrix'),
+	('rotate', 'rotateX', 'rotateY', 'rotateZ'),
+	('scale', 'scaleX', 'scaleY', 'scaleZ'),
+	('translate', 'translateX', 'translateY', 'translateZ'),
+	('maxRotLimit', 'maxRotXLimit', 'maxRotYLimit', 'maxRotZLimit'),
+	('maxRotLimitEnable', 'maxRotXLimitEnable', 'maxRotYLimitEnable', 'maxRotZLimitEnable'),
+	('maxScaleLimit', 'maxScaleXLimit', 'maxScaleYLimit', 'maxScaleZLimit'),
+	('maxScaleLimitEnable', 'maxScaleXLimitEnable', 'maxScaleYLimitEnable', 'maxScaleZLimitEnable'),
+	('maxTransLimit', 'maxTransXLimit', 'maxTransYLimit', 'maxTransZLimit'),
+	('maxTransLimitEnable', 'maxTransXLimitEnable', 'maxTransYLimitEnable', 'maxTransZLimitEnable'),
+	('minRotLimit', 'minRotXLimit', 'minRotYLimit', 'minRotZLimit'),
+	('minRotLimitEnable', 'minRotXLimitEnable', 'minRotYLimitEnable', 'minRotZLimitEnable'),
+	('minScaleLimit', 'minScaleXLimit', 'minScaleYLimit', 'minScaleZLimit'),
+	('minScaleLimitEnable', 'minScaleXLimitEnable', 'minScaleYLimitEnable', 'minScaleZLimitEnable'),
+	('minTransLimit', 'minTransXLimit', 'minTransYLimit', 'minTransZLimit'),
+	('minTransLimitEnable', 'minTransXLimitEnable', 'minTransYLimitEnable', 'minTransZLimitEnable'),
+	('useObjectColor'),
+	('objectColor'),
+	('objectColorRGB', 'objectColorR', 'objectColorG', 'objectColorB'),
+	('wireColorRGB', 'wireColorR', 'wireColorG', 'wireColorB'),
+	('useOutlinerColor'),
+	('outlinerColor', 'outlinerColorR', 'outlinerColorG', 'outlinerColorB')
+)
+
+checkCMX = ( # composeMatrix node
+	('inputQuat', 'inputQuatX', 'inputQuatY', 'inputQuatZ', 'inputQuatW'),
+	('inputRotate', 'inputRotateX', 'inputRotateY', 'inputRotateZ'),
+	('inputRotateOrder'),
+	('inputScale', 'inputScaleX', 'inputScaleY', 'inputScaleZ'),
+	('inputShear', 'inputShearX', 'inputShearY', 'inputShearZ'),
+	('inputTranslate', 'inputTranslateX', 'inputTranslateY', 'inputTranslateZ'),
+	('useEulerRotation')
+)
+
 nodeListStage2Counter = -1 # lazy indexing
 for node in nodeListStage2:
 	nodeListStage2Counter += 1
 
 	thisNodeType = mc.nodeType(node)
 	"""
-	/////////////////////////////////////////////////////////
-	mc.setAttr("  transform nodes and extra commands  ")
+	//////////////////////////////////////////////////////////////
+	mc.setAttr("  recording transform nodes and extra commands  ")
 	mostly default attributes, should come before connectAttr
-	/////////////////////////////////////////////////////////
+	//////////////////////////////////////////////////////////////
 	"""
-	if thisNodeType == "transform":
-		# ["translate", "rotate", "scale", "wireColorRGB", "outlinerColor"]
-		checkAttrList = []
-		checkPlugTriples = ["translate", "rotate", "scale", "wireColorRGB", "outlinerColor"]
-		checkPlug = ["use,,,"]
-		for plug in ["translate", "rotate", "scale", "wireColorRGB", "outlinerColor"]:
-			checkAttrList.append(node + f'.{plug}')
-		# check for INCOMING connections in list of attributes to check
+	if thisNodeType in ["transform", "composeMatrix"]:
+		"""
+		end up with setAttr commands for attributes not connected and is not default value
 		
-		getNodeIncomingConnections = mc.listConnections(node, )
-		for plug in checkAttrList:
-			# if attribute in list is not driven upstream
-			if plug not in getNodeIncomingConnections:
-				# record setAttr command
-				setAttrList.append()
-				# mc.setAttr({node}, {values}, type=datatype)
-		#
-		# 
-		# //////////////////////////////////////////////////////////////////
-		pass
-	
-	"""
-	//////////////////////////////////////////////////////////
-	mc.setAttr("  other DG nodes that would need recording  ")
-	//////////////////////////////////////////////////////////
-	"""
-	if thisNodeType == "composeMatrix":
-		checkAttrList = []
-		checkPlugTriples = ["translate", "rotate", "scale"]
-		pass
+		for compound attributes: if main attribute or all of the subattributes are connected, skip
+		if any of the subattributes are not connected, and are not in their default attributes, just write the setAttr for the entire main attribute
+		"""
+
+		# check for INCOMING connections in list of attributes to check
+		getNodeIncomingConnections = mc.listConnections(node, s=False, d=True, p=True, c=True)
+		# [thisNode.attr, otherNode.attr, ... ]
+		
+		# trim list to just this node
+		for i in range(int(len(getNodeIncomingConnections) * 0.5)): # definitely always even
+			del getNodeIncomingConnections[i+1]
+		# trim strings to just the attribute that has an incoming connection
+		for i in range(len(getNodeIncomingConnections)):
+			getNodeIncomingConnections[i] = getNodeIncomingConnections[i].split['.'][-1]
+		# [attr, attr, attr, ...]
+
+		printSetAttrList = []
+		getPlugHelper : om2.MSelectionList = om2.MSelectionList()
+		checkList = None
+
+		# load check attribute list
+		if thisNodeType == "transform":
+			checkList = checkTransform
+		if thisNodeType == "composeMatrix":
+			checkList = checkCMX
+
+		# for each set of attributes in checker list
+		for attrSet in checkList:
+			if attrSet[0] in getNodeIncomingConnections:
+				# main attribute is connected upstream, skip
+				continue
+			if len(attrSet) > 1:
+				subAttrConnected = True
+				subAttrNotDefault = len(attrSet) -1
+				subAttrMSL : om2.MSelectionList = om2.MSelectionList()
+				for attribute in attrSet[1:]:
+					# check if subattribute is connected
+					subAttrConnected = subAttrConnected and (attribute in getNodeIncomingConnections)
+					# check if subattribute is default value
+					subAttrMSL.add(f"{node}.{attribute}")
+					if subAttrMSL.getPlug(0).isDefaultValue:
+						subAttrNotDefault -= 1
+					subAttrMSL.clear()
+				del subAttrMSL
+				if subAttrConnected or (subAttrNotDefault > 0):
+					# all subattributes are connected, or all subattributes are default
+					continue
+					# otherwise just make the entire setAttr command for the main attribute
+
+			# fall-through case: make setAttr command
+			getAttrValues = mc.getAttr(f'{node}.{attrSet[0]}')
+			if type(getAttrValues) == type(list):
+				# compound attribute, expand listple to single string
+				# [(1.0, 0.0, 0.0)]
+				flatString = ""
+				for val in getAttrValues[0]:
+					flatString += f"{val}, "
+				getAttrValues = flatString.removesuffix(", ")
+			getAttrType = mc.getAttr(f'{node}.{attrSet[0]}', type=True)
+			# compose the command
+			if attrSet[0] == "wireColorRGB":
+				# wireframe command override
+				setAttrList.append(f"mc.color(nodeList[{nodeListStage2.index(node)}], rgb=({getAttrValues}) )")
+				#                    mc.color(               nodeList[n]            , rgb=(      1,0,0    ) )
+				# CAUTION: instances of transfrom objects will share the same wireframe colour in the scene
+				continue
+			setAttrList.append(f"mc.setAttr(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}.{attrSet[0]}', {getAttrValues}, type='{getAttrType}')")
+			#                               f'  {  nodeList[{               n          }]  }  .  attribute '
+			#                    mc.setAttr(                       f'{nodelist[n]}.attribute'               , 1, 2, 3, 4, 5,   type='dataType'     )
+
 
 	"""
 	/////////////////////////////////////////
