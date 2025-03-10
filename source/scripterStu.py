@@ -99,6 +99,7 @@ constructorList = []
 nodeList = []
 nodeListStage2 = [] # in print order, makes referencing them a lot easier here
 jointList = []
+constraintList = [] # create constraint nodes AFTER nodeList mc.create()
 parentList = [] # [ [child from nodeList , parent from file ] , ...]
 addAttrList = []
 setAttrList = []
@@ -343,7 +344,7 @@ for node in checkList:
 		getParent = mc.listRelatives(node, p=True, c=False)[0]
 		jointListIndex = len(jointList)-1
 		nodeList += f"jointList[{jointListIndex}] # joint - {node}"
-		# f'"{node}" # mc.createNode("joint", n={NAME}, p={parentName})'
+		# f'"{node}" # mc.createNode("joint", n={NAME}, p={parentName}, skipSelect=True)'
 		nodeListStage2.append(node)
 		pass	
 	elif thisNodeType == 'ikHandle': # ikHandle, use dedicated command
