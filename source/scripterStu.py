@@ -347,7 +347,7 @@ for node in checkList:
 		# f'"{node}" # mc.createNode("joint", n={NAME}, p={parentName}, skipSelect=True)'
 		nodeListStage2.append(node)
 		pass	
-	elif thisNodeType == 'ikHandle': # ikHandle, use dedicated command
+	elif thisNodeType in ['ikHandle', 'ikEffector']: # ikHandle, use dedicated command
 		# ['ikRPsolver', 'ikSCsolver', 'ikSplineSolver']
 		# query start joint
 		# query end joint
@@ -401,7 +401,7 @@ for node in checkList:
 	"""
 
 # -------------- attribute checking, creation and setting
-checkTransform = ( # transform node
+checkTransform = [ # transform node
 	('offsetParentMatrix'),
 	('rotate', 'rotateX', 'rotateY', 'rotateZ'),
 	('scale', 'scaleX', 'scaleY', 'scaleZ'),
@@ -424,9 +424,9 @@ checkTransform = ( # transform node
 	('wireColorRGB', 'wireColorR', 'wireColorG', 'wireColorB'),
 	('useOutlinerColor'),
 	('outlinerColor', 'outlinerColorR', 'outlinerColorG', 'outlinerColorB')
-)
+]
 
-checkCMX = ( # composeMatrix node
+checkCMX = [ # composeMatrix node
 	('inputQuat', 'inputQuatX', 'inputQuatY', 'inputQuatZ', 'inputQuatW'),
 	('inputRotate', 'inputRotateX', 'inputRotateY', 'inputRotateZ'),
 	('inputRotateOrder'),
@@ -434,7 +434,37 @@ checkCMX = ( # composeMatrix node
 	('inputShear', 'inputShearX', 'inputShearY', 'inputShearZ'),
 	('inputTranslate', 'inputTranslateX', 'inputTranslateY', 'inputTranslateZ'),
 	('useEulerRotation')
-)
+]
+
+checkIKH = [ # ikHandle target, inherits attributes from transform node
+	('poleVector', 'poleVectorX', 'poleVectorY', 'poleVectorZ'),
+	('snapEnable'),
+	('stickiness'),
+	('twist')
+]
+
+checkSplineIK = [ # splineIK, inherits ikHandle, inherits transform
+	('offset'),
+	('roll'),
+]
+checkSplineAdvancedIK = [ # splineIK attributes for advanced twist controls
+	('dTwistControlEnable'),
+	('d')
+]
+
+"""
+the ikSplineSolver in the ikHandle has an advanced twist mode (and corresponding sets of control attributes)
+	these serve to aim the ends of the spline joint chain to two corresponding targets (somewhat like a pole vector)
+	and spread the twist values along the joint chain.
+TODO: this script currently does not cover this, but it's probably worth including a handler for it later
+
+a different ideal would be to have two splines and aim the result of the first spline (that's driving the joint chain)
+	to the target points along the second spline
+this method would be more fitting in a case like a snake climbing a tree (where it curves in multiple c-shapes
+	grabbing both sides of the tree), but would result in a very complex node network
+
+both methods aim to solve the problem of needing an up vector along a spline (a spline alone does not have an "upward-ness") 
+"""
 
 nodeListPrintIndex = -1 # lazy indexing
 for node in nodeListStage2:
