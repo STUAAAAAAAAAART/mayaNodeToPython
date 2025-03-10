@@ -94,12 +94,12 @@ nodeTypeFilterOut = [ # list
 # skipNodeFromConnectionCheck = nodeTypeUseCommandsConstraint + nodeTypeUseCommandsIK + nodeTypeFilterOut
 
 selectionList = []
-parentList = [] # [ [child from nodeList , parent from file ] , ...]
 constructorList = []
 
 nodeList = []
 nodeListStage2 = [] # in print order, makes referencing them a lot easier here
 jointList = []
+parentList = [] # [ [child from nodeList , parent from file ] , ...]
 addAttrList = []
 setAttrList = []
 connectionList = []
@@ -291,7 +291,7 @@ for node in checkList:
 				nodeList.append(f"mc.instance( nodeList[{nodeListStage2.index(tf)}], n='{tf}', lf=False, st=False) # instance of {transformAndShape[0][0]}")
 				#                 mc.instance(             nodelist[n]             , n=NAME  , lf=False, st=False)
 				# make reparenting command
-				# mc.parent() # !!! REPARENTING COMMAND, DOUBLE-CHECK AND EDIT BEFORE RUNNING SCRIPT
+					# this step moved to stage 2 to make querying processed nodes more easily
 				skipList.append(tf)
 				nodeListStage2.append(tf)
 				addToCounter += 1 # +1 instance
@@ -435,11 +435,32 @@ checkCMX = ( # composeMatrix node
 	('useEulerRotation')
 )
 
-nodeListStage2Counter = -1 # lazy indexing
+nodeListPrintIndex = -1 # lazy indexing
 for node in nodeListStage2:
-	nodeListStage2Counter += 1
+	nodeListPrintIndex += 1 # index in nodeList output
 
 	thisNodeType = mc.nodeType(node)
+	
+	"""
+	////////////////////////////////////////////////////////
+	mc.parent("  reparenting objects on the DAG hierachy  ")
+	////////////////////////////////////////////////////////
+	"""
+	if thisNodeType in ["transform", "ikHandle"]:
+		# get parent
+		getParent = mc.listRelatives('node', p=True, c=False )
+		if getParent: # listRelatives has [something] and did not return None
+			getParent = getParent[0]
+			printParent = getParent
+			if getParent in nodeListStage2:
+				getParent = f"f'nodeList[{nodeList.index(getParent)}]'" # f'nodeList[n]'
+			else:
+				getParent = f"'{getParent}'" # 'parentNode'
+			# compose parenting command
+			#                   mc.parent(            "child"              ,  "parent"      )
+			parentList.append(f"mc.parent(f'nodeList[{nodeListPrintIndex}]', {getParent} ) # child: {node} -> parent: {printParent} " )
+			#                   mc.parent(            "child"              , f'nodeList[n]' )
+
 	"""
 	//////////////////////////////////////////////////////////////
 	mc.setAttr("  recording transform nodes and extra commands  ")
@@ -458,13 +479,16 @@ for node in nodeListStage2:
 		getNodeIncomingConnections = mc.listConnections(node, s=False, d=True, p=True, c=True)
 		# [thisNode.attr, otherNode.attr, ... ]
 		
+		if getNodeIncomingConnections: # if there are [connecions] and listConnections did not return None
 		# trim list to just this node
-		for i in range(int(len(getNodeIncomingConnections) * 0.5)): # definitely always even
-			del getNodeIncomingConnections[i+1]
-		# trim strings to just the attribute that has an incoming connection
-		for i in range(len(getNodeIncomingConnections)):
-			getNodeIncomingConnections[i] = getNodeIncomingConnections[i].split['.'][-1]
-		# [attr, attr, attr, ...]
+			for i in range(int(len(getNodeIncomingConnections) * 0.5)): # definitely always even
+				del getNodeIncomingConnections[i+1]
+			# trim strings to just the attribute that has an incoming connection
+			for i in range(len(getNodeIncomingConnections)):
+				getNodeIncomingConnections[i] = getNodeIncomingConnections[i].split['.'][-1]
+			# [attr, attr, attr, ...]
+		else: # listConnections returned None
+			getNodeIncomingConnections = [] # just to make the following work
 
 		printSetAttrList = []
 		getPlugHelper : om2.MSelectionList = om2.MSelectionList()
@@ -659,10 +683,16 @@ fileEnumerator.append(f"nodeList = list(range({len(nodeListStage2)}))\n")
 for printOut in nodeList:
 	fileEnumerator.append(f"{printOut}\n")
 
-fileEnumerator.append("\n# shape nodes\n")
+fileEnumerator.append("\n# reparent new DAG nodes\n# !!! DOUBLE-CHECK AND EDIT BEFORE RUNNING SCRIPT !!!\n")
+for printOut in parentList:
+	fileEnumerator.append(f"{printOut}\n")
 
 fileEnumerator.append("\n# custom attributes\n")
 for printOut in addAttrList:
+	fileEnumerator.append(f"{printOut}\n")
+
+fileEnumerator.append("\n# write attributes\n")
+for printOut in setAttrList:
 	fileEnumerator.append(f"{printOut}\n")
 
 fileEnumerator.append("\n# connect attributes\n")
