@@ -35,7 +35,7 @@ else:
 dateString = f"{sysTimezone}.{saveTime.year:04}.{saveTime.month:02}.{saveTime.day:02}.{makeSecondsTimestamp:05}"
 
 # filename:
-fileNameScriptOut = f"{fileNameMa}_cmdPrint.{dateString}.py"
+fileNameScriptOut = f"{fileNameMa}_print.{dateString}.py"
 
 outfile = None
 try:
@@ -57,7 +57,12 @@ activeSelection: om2.MSelectionList = om2.MGlobal.getActiveSelectionList()
 
 # detection phase: get all connections strictly within selection
 
-checkList = activeSelection.getSelectionStrings() # -> list : ["shortName", ... ]
+checkList : list = activeSelection.getSelectionStrings() # -> list : ["shortName", ... ]
+
+nodeTypeShapeNodes = [ # list
+	# currently supported shapes for re-creation
+	"bezierCurve", "nurbsCurve"
+	]
 
 nodeTypeUseCommandsConstraint = [ # list
 	# the usual constraints
@@ -79,9 +84,8 @@ nodeTypeSkip = [ # list
 	'ikEffector' # node created with IK nodes, rarely does the need to adjust them arise
 ]
 
-
 nodeTypeFilterOut = [ # list
-	# other constrain types specifiec in maya; skip
+	# other constrain types specified in maya; skip
 	'normalConstraint', 'dynamicConstraint', 'pointOnPolyConstraint', 'rigidConstraint', 'symmetryConstraint', 'tangentConstraint', 
 	# skinning nodes, apply in-scene or elsewhere; skip
 	'skinCluster', 'cluster', 'clusterFlexorShape', 'clusterHandle', 'jointCluster', 'jointClusterManip'
@@ -90,13 +94,28 @@ nodeTypeFilterOut = [ # list
 # skipNodeFromConnectionCheck = nodeTypeUseCommandsConstraint + nodeTypeUseCommandsIK + nodeTypeFilterOut
 
 selectionList = []
-nodeList = []
 constructorList = []
+
+nodeList = []
+nodeListStage2 = [] # in print order, makes referencing them a lot easier here
+jointList = []
+parentList = [] # [ [child from nodeList , parent from file ] , ...]
 addAttrList = []
+setAttrList = []
 connectionList = []
+
 nodeCounter = 0
+skipList = [] # for instances like transform nodes where it has already been processed ahread of the list
+
 for node in checkList:
+	if node in skipList:
+		# node found in skipList, possibly processed in advance
+		del skipList[skipList.index(node)]
+	#	skipList.pop(skipList.index(node)) # remove from skiplist to make searching tiny bit quicker
+		continue
+
 	addToCounter = 1
+
 	# ============= write createNode / creation commands
 	thisNodeType = mc.nodeType(node)
 	if thisNodeType in nodeTypeUseCommandsConstraint: # constraints, use dedicated commands
@@ -104,9 +123,11 @@ for node in checkList:
 			# this might be a bit too complex to cover all possible cases, probably TODO improve this as needed
 		
 		# oh my god, every constraint command has exclusive flags
-		# also the constrain commands create a user 
+		# also the constrain commands create a user-defined attribute
 
 		# query number of targets
+
+		# ///////////////////////////////////////////////////////////////////////////
 		
 		# if many targets: comment and list names
 		nodeList.append(f"mc.{thisNodeType}('!!SELECT PARENT HERE','{stu_constraintChild}', n='{node}' , maintainOffset=False)")
@@ -117,9 +138,216 @@ for node in checkList:
 
 		nodeList.append(f"mc.{thisNodeType}('!!SELECT PARENT HERE','{stu_constraintChild}', n='{node}' , maintainOffset=False)")
 		# mc.command(selection) # e.g. [parent,child]
+
+		nodeListStage2.append(node) # handoff to stage 2 
 		pass
+
+	elif thisNodeType in ["nurbsCurve", "bezierCurve"] or thisNodeType == "transform": # nurbsCurve and general transforms
+		"""
+		CAUTION0: now dealing with DAG paths with relative names and parenting hierachy
+		CAUTION1: now dealing with object instancing, which means many transform nodes can share a single shape node
+
+		stuff to end up with:
+		- transform node
+		- transform attributes
+		- shape node
+		- shape data
+		- shape node attributes (just in case)
+		"""
+		# pre-prepare handlers with [[transform/s,... ] , shape]
+		transformAndShape = [[], None]
+		thisShapeType = ""
+
+		# if node is transform; current state: [[], None] 
+		if thisNodeType == "transform":
+			# get shape
+			thisNodeShapes = mc.listRelatives(n=node, s=True, ni=True)
+			# if has shapes:
+			if len(thisNodeShapes) > 0:
+				thisShapeType = mc.nodeType(thisNodeShapes[0])
+				# set transformAndShape[1]
+				transformAndShape[1] = thisNodeShapes[0]
+				# end up with [[], shape]
+			# if no shapes:
+			else:
+				transformAndShape[0].append(node)
+				# end up with [[node], None]
+
+		# if node is curve shapes: current state if not transform: [[], None]
+		if thisNodeType in ["nurbsCurve, bezierCurve"]:
+			thisShapeType = thisNodeType
+			transformAndShape[1] = node
+			# end up with [[], shape]
+		"""
+		possible states:
+		- [[], shape] ; has valid shape node
+		- [[node], None] ; only transform
+		"""
+		# enumerate transform nodes if there is a shape
+		if transformAndShape[1]:
+			transformAndShape[0] = mc.listRelatives(transformAndShape[1], ap=True) # list
+			# first item in list is original object, subsequent are instances
+		
+		# recast transform list to MSL just in case (going to use this for checking re-encounters with skipList)
+		listGetSel : om2.MSelectionList = om2.MSelectionList()
+		for i in transformAndShape[0]:
+			listGetSel.add(i)
+		transformAndShape[0] = list(listGetSel.getSelectionStrings())
+		listGetSel.clear()
+		del listGetSel
+		
+		"""
+		possible states:
+		- [[node], shape] ; transforms and instances, has valid shape node
+		- [[node], None] ; only transform
+		"""
+		# don't check for list duplicates here: this branch will grab all relevant transform and/or shape relatives at once, and processes them in proper order
+			# if a node (that has already been processed) is encountered down the checkList, it would be caught at the top of this if-tree before it ever reaches here
+		
+		# enumerate first transform
+		getParent = mc.listRelatives(transformAndShape[0][0])
+		if getParent:
+			getParent = [f'p="{getParent[0]}"', getParent[0]]
+		else:
+			getParent = ['',''] # None cast to string is the word 'None' -_-
+		nodeList.append(f'nodeList[{nodeCounter}] = mc.createNode("transform", n="{transformAndShape[0][0]}", {getParent[0]}, skipSelect = True) # parented under: {getParent[1]}')
+		#                 nodeList[n]             = mc.createNode("transform", n="nName"                    , p="parent"    , skipSelect = True)
+		# no addToCounter here, it's already 1
+		nodeListStage2.append(transformAndShape[0][0])
+
+		# enumerate shape node
+		if transformAndShape[1]:
+			shapeCommand = []
+			shapeCommand.append(f'nodeList[{nodeCounter+1}] = mc.createNode({thisShapeType}, n="{transformAndShape[1]}", p="{transformAndShape[0][0]}", skipSelect = True)')
+			#                     nodeList[n]               = mc.createNode("nurbsCurve"   , n="shapeName"             , P="transformName",             skipSelect = True)
+			addToCounter += 1 # shape node
+			skipList.append(transformAndShape[1])
+			nodeListStage2.append(transformAndShape[1])
+			if thisShapeType in ["nurbsCurve, bezierCurve"]:
+				# put setAttr(".cc") command here?
+				# ----------------------------------------------------------------------------------------------
+				# time for om2.MPlug.getSetAttrCmds()
+				getShapeMSL : om2.MSelectionList = om2.MSelectionList().add(transformAndShape[1]+".worldSpace")
+				getShapePlug :om2.MPlug = getShapeMSL.getPlug(0)
+				getShapeMSL.clear()
+				del getShapeMSL
+				melString = getShapePlug.getSetAttrCmds() # list of line strings, in MEL
+				del melString[-1] # don't need the last bit
+				getShapeDataType = ""
+				# get data type
+				if "dataBezierCurve" in melString[0]:
+					getShapeDataType = "dataBezierCurve"
+				else:
+					getShapeDataType = "nurbsCurve"
+				del melString[0] # don't need the MEL command itself
+
+				for i in range(len(melString)):
+					melString[i] = melString[i].replace("\t",'') # strip all indents
+
+				melString[0] = melString[0].replace("yes", "True")
+				melString[0] = melString[0].replace("no", "False")
+				melString[0] = melString[0].replace(' ', ", ")
+				melString[0] += ", "
+
+					# '11 0 0 0 1 2 3 4 5 6 6 6'
+				melStringKnots = melString[1].split(' ', maxsplit=1)
+					# ['11', '0 0 0 1 2 3 4 5 6 6 6']
+				melStringKnots[1] = melStringKnots[1].replace(' ', ', ')
+					# ['11', '0, 0, 0, 1, 2, 3, 4, 5, 6, 6, 6']
+				melStringKnots[1] = f"[{melStringKnots[1]}]"
+					# ['11', '[0, 0, 0, 1, 2, 3, 4, 5, 6, 6, 6]']
+				melString[1] = f"{melStringKnots[1]}, {melStringKnots[0]}, "
+					# '[0, 0, 0, 1, 2, 3, 4, 5, 6, 6, 6], 11'
+
+				melString[2] += ', ' # CV count
+
+				for i in range(len(melString) -3): # CV triples
+					# "-2.0000000000001679 5 13.00000000000019"
+					melString[i+3] = melString[i+3].replace(' ', ", ")
+					# "-2.0000000000001679, 5, 13.00000000000019"
+					melString[i+3] = f"[{melString[i+3]}], "
+					# "[-2.0000000000001679, 5, 13.00000000000019], "
+				melString[-1] = melString[-1].replace("], " , "]") # remove comma from end of last item
+
+				buildString = ""
+				for line in melString:
+					buildString += line
+
+				# ----------------------------------------------------------------------------------------------
+					
+				shapeCommand.append(f'mc.setAttr(f"{'{'}nodeList[{nodeCounter+1}]{'}'}.cc", {buildString}, type = "{getShapeDataType}")')
+				#                     mc.setAttr(f"  {          nodeList[n]        }.cc",   {curveData}  , type = "nurbsCurve"        )
+				# remember to use the .cc attribute and not the .worldSpace attribute when applying grafted curve data
+			else:
+				# could be polygon mesh or NURBS surface, skip for now
+				# TODO: reconsider for NURBS surface, might have a chance it'd be used as a UV positional control				
+				shapeCommand.append("# check maya scene for shape node type, might be polymesh or NURBS surface")
+		nodeList.append(f"{shapeCommand[0]}\n{shapeCommand[1]}")
+			
+		# enumerate subsequent instances
+		if len(transformAndShape[0]) > 1: # if there are more than one transform nodes gathered 
+			for tf in transformAndShape[0][1:]: #leave out the first one, it's done above
+				# make instance command
+				nodeList.append(f"mc.instance( nodeList[{nodeListStage2.index(tf)}], n='{tf}', lf=False, st=False) # instance of {transformAndShape[0][0]}")
+				#                 mc.instance(             nodelist[n]             , n=NAME  , lf=False, st=False)
+				# make reparenting command
+					# this step moved to stage 2 to make querying processed nodes more easily
+				skipList.append(tf)
+				nodeListStage2.append(tf)
+				addToCounter += 1 # +1 instance
+		
+		# script list admin
+			# append all created nodes (except thisNode) into skipList
+			# append all created nodes to stage 2 processing list for connection and attribute handling
+			# note that transform node should have its own override to get transform attribute data and wireframe and outliner colour states
+		pass
+
+	elif thisNodeType == "joint":
+		# script-only: return name of joints
+		"""
+		normally work would be done upon an existing skinned model with joints
+		the exceptions would be with copying driver/utility joints, but those should be scripted separately or created manually
+
+		see also the duplicate hierachy script
+		"""
+		# annotate joint connection properties for overview; joint connection commands will still be recorded later
+		# query joint for any connections
+		getConnectionsInbound = mc.listConnections(node, sh=True, s=True, d=False)
+		getConnectionsOutbound = mc.listConnections(node, sh=True, s=False, d=True)
+		
+		grabNode:om2.MSelectionList = om2.MSelectionList()
+		listInbound = []
+		listOutbound = []
+		for n in getConnectionsInbound:
+			if mc.nodeType(n) == "nodeGraphEditorInfo":
+				continue
+			grabNode.clear()
+			grabNode.add(n)
+			grabNodeSelectionString = grabNode.getSelectionStrings(0)[0]
+			if grabNodeSelectionString in listInbound:
+				continue
+			listInbound.append(grabNodeSelectionString)
+		for n in getConnectionsOutbound:
+			if mc.nodeType(n) == "nodeGraphEditorInfo":
+				continue
+			grabNode.clear()
+			grabNode.add(n)
+			grabNodeSelectionString = grabNode.getSelectionStrings(0)[0]
+			if grabNodeSelectionString in listOutbound:
+				continue
+			listOutbound.append(grabNodeSelectionString)
+
+		# add to jointList
+		jointList.append(f'"{node}" # incoming: {listInbound} ; outgoing: {listOutbound}')
+		# add to nodeList (for completion's sake)
+		getParent = mc.listRelatives(node, p=True, c=False)[0]
+		jointListIndex = len(jointList)-1
+		nodeList += f"jointList[{jointListIndex}] # joint - {node}"
+		# f'"{node}" # mc.createNode("joint", n={NAME}, p={parentName})'
+		nodeListStage2.append(node)
+		pass	
 	elif thisNodeType == 'ikHandle': # ikHandle, use dedicated command
-		['ikRPsolver', 'ikSCsolver', 'ikSplineSolver']
+		# ['ikRPsolver', 'ikSCsolver', 'ikSplineSolver']
 		# query start joint
 		# query end joint
 		stu_ikhSolver = mc.ikHandle(node, query = True, solver=True)
@@ -128,6 +356,8 @@ for node in checkList:
 		stu_ikhEndJoint   = mc.listConnections(stu_ikhEffector+'.offsetParentMatrix', source = True , destination = False)[0]
 		# naming the variables like this because oh boy i don't want to mix up ikHandle the variable and ikHandle the string and ikHandle the node...
 		
+
+		# ////////////////////////////////////////////////////////////////////////////////////
 		nodeListHolder = []
 
 		nodeListHolder.append( f"ikhSplineOutput_{nodeCounter} = mc.ikHandle(n='{node}', sj='{stu_ikhStartJoint}', ee='{stu_ikhEndJoint}', solver='{stu_ikhSolver}' )" )
@@ -139,6 +369,7 @@ for node in checkList:
 		nodeListHolder.append( f"nodeList[{nodeCounter +1}] = ikhSplineOutput_{nodeCounter}[1] # effector " )
 		#                        nodeList[n+1]              = ikhSplineOutput_n[1]             # effector
 		# nodeList[n+1] = ikhSplineOutput_n[1] # effector
+		
 		addToCounter +=1 # one extra for invoking the ikHandle creator function
 
 		if stu_ikhSolver == 'ikSplineSolver':
@@ -149,7 +380,11 @@ for node in checkList:
 			# nodeList[n+2] = ikhSplineOutput_n[2] # control curve
 			addToCounter +=1 # one extra for invoking the ikHandle creator function in splineIK mode
 
+		# append commands to nodeList
 		nodeList += nodeListHolder
+		# append new nodes to stage 2
+		nodeListStage2 += #nodeListHolder
+
 
 	elif thisNodeType in nodeTypeFilterOut: # too complex, require user creation
 		nodeList.append(f'nodeList[n] = "{node}" # <- nodetype: {thisNodeType}')
@@ -159,8 +394,162 @@ for node in checkList:
 		nodeList.append(f'nodeList[{nodeCounter}] = mc.createNode("{thisNodeType}", n="{node}", skipSelect = True)')
 		#                 nodeList[n]             = mc.createNode("nodeType"      , n="nName" , skipSelect = True)
 		# nodeList[n] = mc.createNode("nodeType", n="nName", skipSelect = True)
-		
 
+	"""
+	REFACTOR: iterate through discovered list of nodes from previous step, due to DAG objects and shape/transform node discovery
+	"""
+
+# -------------- attribute checking, creation and setting
+checkTransform = ( # transform node
+	('offsetParentMatrix'),
+	('rotate', 'rotateX', 'rotateY', 'rotateZ'),
+	('scale', 'scaleX', 'scaleY', 'scaleZ'),
+	('translate', 'translateX', 'translateY', 'translateZ'),
+	('maxRotLimit', 'maxRotXLimit', 'maxRotYLimit', 'maxRotZLimit'),
+	('maxRotLimitEnable', 'maxRotXLimitEnable', 'maxRotYLimitEnable', 'maxRotZLimitEnable'),
+	('maxScaleLimit', 'maxScaleXLimit', 'maxScaleYLimit', 'maxScaleZLimit'),
+	('maxScaleLimitEnable', 'maxScaleXLimitEnable', 'maxScaleYLimitEnable', 'maxScaleZLimitEnable'),
+	('maxTransLimit', 'maxTransXLimit', 'maxTransYLimit', 'maxTransZLimit'),
+	('maxTransLimitEnable', 'maxTransXLimitEnable', 'maxTransYLimitEnable', 'maxTransZLimitEnable'),
+	('minRotLimit', 'minRotXLimit', 'minRotYLimit', 'minRotZLimit'),
+	('minRotLimitEnable', 'minRotXLimitEnable', 'minRotYLimitEnable', 'minRotZLimitEnable'),
+	('minScaleLimit', 'minScaleXLimit', 'minScaleYLimit', 'minScaleZLimit'),
+	('minScaleLimitEnable', 'minScaleXLimitEnable', 'minScaleYLimitEnable', 'minScaleZLimitEnable'),
+	('minTransLimit', 'minTransXLimit', 'minTransYLimit', 'minTransZLimit'),
+	('minTransLimitEnable', 'minTransXLimitEnable', 'minTransYLimitEnable', 'minTransZLimitEnable'),
+	('useObjectColor'),
+	('objectColor'),
+	('objectColorRGB', 'objectColorR', 'objectColorG', 'objectColorB'),
+	('wireColorRGB', 'wireColorR', 'wireColorG', 'wireColorB'),
+	('useOutlinerColor'),
+	('outlinerColor', 'outlinerColorR', 'outlinerColorG', 'outlinerColorB')
+)
+
+checkCMX = ( # composeMatrix node
+	('inputQuat', 'inputQuatX', 'inputQuatY', 'inputQuatZ', 'inputQuatW'),
+	('inputRotate', 'inputRotateX', 'inputRotateY', 'inputRotateZ'),
+	('inputRotateOrder'),
+	('inputScale', 'inputScaleX', 'inputScaleY', 'inputScaleZ'),
+	('inputShear', 'inputShearX', 'inputShearY', 'inputShearZ'),
+	('inputTranslate', 'inputTranslateX', 'inputTranslateY', 'inputTranslateZ'),
+	('useEulerRotation')
+)
+
+nodeListPrintIndex = -1 # lazy indexing
+for node in nodeListStage2:
+	nodeListPrintIndex += 1 # index in nodeList output
+
+	thisNodeType = mc.nodeType(node)
+	
+	"""
+	////////////////////////////////////////////////////////
+	mc.parent("  reparenting objects on the DAG hierachy  ")
+	////////////////////////////////////////////////////////
+	"""
+	if thisNodeType in ["transform", "ikHandle"]:
+		# get parent
+		getParent = mc.listRelatives('node', p=True, c=False )
+		if getParent: # listRelatives has [something] and did not return None
+			getParent = getParent[0]
+			printParent = getParent
+			if getParent in nodeListStage2:
+				getParent = f"f'nodeList[{nodeList.index(getParent)}]'" # f'nodeList[n]'
+			else:
+				getParent = f"'{getParent}'" # 'parentNode'
+			# compose parenting command
+			#                   mc.parent(            "child"              ,  "parent"      )
+			parentList.append(f"mc.parent(f'nodeList[{nodeListPrintIndex}]', {getParent} ) # child: {node} -> parent: {printParent} " )
+			#                   mc.parent(            "child"              , f'nodeList[n]' )
+
+	"""
+	//////////////////////////////////////////////////////////////
+	mc.setAttr("  recording transform nodes and extra commands  ")
+	mostly default attributes, should come before connectAttr
+	//////////////////////////////////////////////////////////////
+	"""
+	if thisNodeType in ["transform", "composeMatrix"]:
+		"""
+		end up with setAttr commands for attributes not connected and is not default value
+		
+		for compound attributes: if main attribute or all of the subattributes are connected, skip
+		if any of the subattributes are not connected, and are not in their default attributes, just write the setAttr for the entire main attribute
+		"""
+
+		# check for INCOMING connections in list of attributes to check
+		getNodeIncomingConnections = mc.listConnections(node, s=False, d=True, p=True, c=True)
+		# [thisNode.attr, otherNode.attr, ... ]
+		
+		if getNodeIncomingConnections: # if there are [connecions] and listConnections did not return None
+		# trim list to just this node
+			for i in range(int(len(getNodeIncomingConnections) * 0.5)): # definitely always even
+				del getNodeIncomingConnections[i+1]
+			# trim strings to just the attribute that has an incoming connection
+			for i in range(len(getNodeIncomingConnections)):
+				getNodeIncomingConnections[i] = getNodeIncomingConnections[i].split['.'][-1]
+			# [attr, attr, attr, ...]
+		else: # listConnections returned None
+			getNodeIncomingConnections = [] # just to make the following work
+
+		printSetAttrList = []
+		getPlugHelper : om2.MSelectionList = om2.MSelectionList()
+		checkList = None
+
+		# load check attribute list
+		if thisNodeType == "transform":
+			checkList = checkTransform
+		if thisNodeType == "composeMatrix":
+			checkList = checkCMX
+
+		# for each set of attributes in checker list
+		for attrSet in checkList:
+			if attrSet[0] in getNodeIncomingConnections:
+				# main attribute is connected upstream, skip
+				continue
+			if len(attrSet) > 1:
+				subAttrConnected = True
+				subAttrNotDefault = len(attrSet) -1
+				subAttrMSL : om2.MSelectionList = om2.MSelectionList()
+				for attribute in attrSet[1:]:
+					# check if subattribute is connected
+					subAttrConnected = subAttrConnected and (attribute in getNodeIncomingConnections)
+					# check if subattribute is default value
+					subAttrMSL.add(f"{node}.{attribute}")
+					if subAttrMSL.getPlug(0).isDefaultValue:
+						subAttrNotDefault -= 1
+					subAttrMSL.clear()
+				del subAttrMSL
+				if subAttrConnected or (subAttrNotDefault > 0):
+					# all subattributes are connected, or all subattributes are default
+					continue
+					# otherwise just make the entire setAttr command for the main attribute
+
+			# fall-through case: make setAttr command
+			getAttrValues = mc.getAttr(f'{node}.{attrSet[0]}')
+			if type(getAttrValues) == type(list):
+				# compound attribute, expand listple to single string
+				# [(1.0, 0.0, 0.0)]
+				flatString = ""
+				for val in getAttrValues[0]:
+					flatString += f"{val}, "
+				getAttrValues = flatString.removesuffix(", ")
+			getAttrType = mc.getAttr(f'{node}.{attrSet[0]}', type=True)
+			# compose the command
+			if attrSet[0] == "wireColorRGB":
+				# wireframe command override
+				setAttrList.append(f"mc.color(nodeList[{nodeListStage2.index(node)}], rgb=({getAttrValues}) )")
+				#                    mc.color(               nodeList[n]            , rgb=(      1,0,0    ) )
+				# CAUTION: instances of transfrom objects will share the same wireframe colour in the scene
+				continue
+			setAttrList.append(f"mc.setAttr(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}.{attrSet[0]}', {getAttrValues}, type='{getAttrType}')")
+			#                               f'  {  nodeList[{               n          }]  }  .  attribute '
+			#                    mc.setAttr(                       f'{nodelist[n]}.attribute'               , 1, 2, 3, 4, 5,   type='dataType'     )
+
+
+	"""
+	/////////////////////////////////////////
+	mc.addAttr("  user-defined attributes  ")
+	/////////////////////////////////////////
+	"""
 	# ============= check for user-defined attributes and write addAttr commands
 	checkAttrUD = mc.listAttr(node, userDefined=True)
 		# WARNING: returns noneType if list is empty
@@ -211,7 +600,11 @@ for node in checkList:
 						# listChildren = True
 						# listSiblings = True
 				addAttrList.append(f'# "{checkAttrType}" type: {node}.{attr}')
-			
+	"""
+	/////////////////////////////////////////
+	mc.connectAttr("  connection operator  ")
+	/////////////////////////////////////////
+	"""
 	# ============= query outgoing connections
 	if thisNodeType in nodeTypeUseCommandsConstraint:
 		# constraint node override, connections already made
@@ -245,9 +638,9 @@ for node in checkList:
 			continue
 
 		# filter out downstream connections that do not connect to selection
-		if queryConnectedNode[0] in checkList: 
+		if queryConnectedNode[0] in nodeListStage2: 
 			# downstream node is in selection scope, append [input, output] to list
-			holdIndex = checkList.index(queryConnectedNode[0])
+			holdIndex = nodeListStage2.index(queryConnectedNode[0])
 				# error case ("thing" is not in list) should not occur because it's filtered earlier
 
 			fromNode = 'f"{' + f"nodeList[{nodeCounter}]" + '}' + f'.{queryConnections[i+i  ].split(".")[1]}"'
@@ -260,7 +653,9 @@ for node in checkList:
 						
 			# write connectAttr commands
 			connectionList.append(f'mc.connectAttr({fromNode}, {toNode}) # {queryConnections[i+i]} -> {queryConnections[i+i+1]}')
-			
+
+
+
 	# next node
 	nodeCounter += addToCounter
 
@@ -278,13 +673,26 @@ fileEnumerator = [
 	"activeSelection = om2.MGlobal.getActiveSelectionList()\n"	
 ]
 
+fileEnumerator.append("\n# list of joints\n")
+fileEnumerator.append(f"jointList = list(range({len(jointList)}))\n")
+for printOut in jointList:
+	fileEnumerator.append(f"{printOut}\n")
+
 fileEnumerator.append("\n# create nodes\n")
-fileEnumerator.append(f"nodeList = list(range({len(checkList)}))\n")
+fileEnumerator.append(f"nodeList = list(range({len(nodeListStage2)}))\n")
 for printOut in nodeList:
+	fileEnumerator.append(f"{printOut}\n")
+
+fileEnumerator.append("\n# reparent new DAG nodes\n# !!! DOUBLE-CHECK AND EDIT BEFORE RUNNING SCRIPT !!!\n")
+for printOut in parentList:
 	fileEnumerator.append(f"{printOut}\n")
 
 fileEnumerator.append("\n# custom attributes\n")
 for printOut in addAttrList:
+	fileEnumerator.append(f"{printOut}\n")
+
+fileEnumerator.append("\n# write attributes\n")
+for printOut in setAttrList:
 	fileEnumerator.append(f"{printOut}\n")
 
 fileEnumerator.append("\n# connect attributes\n")
