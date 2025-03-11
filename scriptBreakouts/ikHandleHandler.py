@@ -101,3 +101,57 @@ this method would be more fitting in a case like a snake climbing a tree (where 
 
 both methods aim to solve the problem of needing an up vector along a spline (a spline alone does not have an "upward-ness") 
 """
+
+"""
+scripter order of evaluation
+---------------------------------------------------------------------------------------------------------------
+
+requirements: curve object has to be re-created with mc.curve command instead of applying CV data to curveShape.cc,
+	to be able to be constructed with edit points (EPs) at joint positions, instead of control vertces (CVs)
+
+mc.curve(replace=True) has the means to re-create an existing nurbs curve object (construction history must be emptied)
+	so one possible strategy would be to make createNode commands first, get the transform, and invoke mc.curve(r=True)
+	with a list of EPs
+
+	
+case 0: curve ordered before splineIK in list
+---------------------------------------------------------------------------------------------------------------
+>>> encounter curve object
+verify existence: not found
+	mc.createNode('transform', n=curveTransform)
+	mc.createNode('nurbsCurve', n=theCurveShape, p=curveTransform)
+	mc.setAttr(theCurveShape.cc, etc etc etc, type='nurbsCurve') # by default, just go with it
+
+>>> encounter ikHandle of splineIK type
+[theHandle, theEffector]
+# query existence of curve -> [curveTransform, theCurveShape]
+# get world positions of joints -> jointEP = [...]
+
+# replace curve with joint points
+mc.curve(curveTransform, r=True, ep=jointEP)
+# make ik commands
+mc.ikHandle(name=theHandle, ee=theEffector, solver='solver', curve='curveShape') -> [handle, effector]
+
+
+case 1: splineIK ordered BEFORE curve in list
+---------------------------------------------------------------------------------------------------------------
+>>> encounter ikHandle of splineIK type
+[theHandle, theEffector]
+# query existence of curve: not found
+	# query connections for spline driver -> [theCurveShape]
+	# query transform node: mc.listRelatives -> [curveTransform]
+	mc.createNode('transform', n=curveTransform)
+	mc.createNode('nurbsCurve', n=theCurveShape, p=curveTransform)
+# get world positions of joints -> jointEP = [...]
+
+# replace curve with joint points
+mc.curve(curveTransform, r=True, ep=jointEP)
+# make ik commands
+mc.ikHandle(name=theHandle, ee=theEffector, solver='solver', curve='curveShape') -> [handle, effector]
+
+>>> encounter curve object
+verify existence and skip
+enumerate instances as usual (unlikely but leave as default for other stuff like controls)
+
+"""
+
