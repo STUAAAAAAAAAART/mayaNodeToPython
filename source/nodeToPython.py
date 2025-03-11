@@ -52,6 +52,11 @@ except:
 		raise FileExistsError(f"File exists and not empty: {fileNameScriptOut}")
 # ====== file name ready
 
+"""
+============
+nodeToPython
+============
+"""
 
 activeSelection: om2.MSelectionList = om2.MGlobal.getActiveSelectionList()
 
@@ -59,10 +64,6 @@ activeSelection: om2.MSelectionList = om2.MGlobal.getActiveSelectionList()
 
 checkList : list = activeSelection.getSelectionStrings() # -> list : ["shortName", ... ]
 
-nodeTypeShapeNodes = [ # list
-	# currently supported shapes for re-creation
-	"bezierCurve", "nurbsCurve"
-	]
 
 nodeTypeUseCommandsConstraint = [ # list
 	# the usual constraints
@@ -115,11 +116,24 @@ for node in checkList:
 	#	skipList.pop(skipList.index(node)) # remove from skiplist to make searching tiny bit quicker
 		continue
 
-	addToCounter = 1
-
 	# ============= write createNode / creation commands
 	thisNodeType = mc.nodeType(node)
+	
+	"""
+	==================================================================
+	STAGE 1: evaluate selection and write node creation commands
+	
+	creation commands composed here and not in a separate initial loop
+		because of transform instancing
+	==================================================================
+	"""
+
 	if thisNodeType in nodeTypeUseCommandsConstraint: # constraints, use dedicated commands
+		"""
+		/////////////////////
+		transform constraints
+		/////////////////////
+		"""
 		stu_constraintChild = mc.listConnections(node+'.constraintParentInverseMatrix', source = True , destination = False)[0]
 			# this might be a bit too complex to cover all possible cases, probably TODO improve this as needed
 		
@@ -144,6 +158,12 @@ for node in checkList:
 		pass
 
 	elif thisNodeType in ["nurbsCurve", "bezierCurve"] or thisNodeType == "transform": # nurbsCurve and general transforms
+		"""
+		/////////////////////////////////////////////////////
+		curve objects, transform node and curve/bezier shapes
+		/////////////////////////////////////////////////////
+		"""
+		
 		"""
 		CAUTION0: now dealing with DAG paths with relative names and parenting hierachy
 		CAUTION1: now dealing with object instancing, which means many transform nodes can share a single shape node
@@ -205,7 +225,9 @@ for node in checkList:
 		# don't check for list duplicates here: this branch will grab all relevant transform and/or shape relatives at once, and processes them in proper order
 			# if a node (that has already been processed) is encountered down the checkList, it would be caught at the top of this if-tree before it ever reaches here
 		
+		# +++++++++++++++++++++++++
 		# enumerate first transform
+		# +++++++++++++++++++++++++
 		getParent = mc.listRelatives(transformAndShape[0][0])
 		if getParent:
 			getParent = [f'p="{getParent[0]}"', getParent[0]]
@@ -216,16 +238,22 @@ for node in checkList:
 		# no addToCounter here, it's already 1
 		nodeListStage2.append(transformAndShape[0][0])
 
+		# ++++++++++++++++++++
 		# enumerate shape node
-		if transformAndShape[1]:
+		# ++++++++++++++++++++
+		if transformAndShape[1]: # if there is a shape node in this transform
+			shapeNodeListIndex = 0
+			if transformAndShape[1] in nodeListStage2: # if an existing curve shape exists (because splineIK command invoked)
+				shapeNodeListIndex = nodeListStage2.index(transformAndShape[1])
+			else: # if relatively new
+				nodeListStage2.append(transformAndShape[1]) # shape node
+				shapeNodeListIndex = len(nodeListStage2)-1
+			# compose shape node
 			shapeCommand = []
-			shapeCommand.append(f'nodeList[{nodeCounter+1}] = mc.createNode({thisShapeType}, n="{transformAndShape[1]}", p="{transformAndShape[0][0]}", skipSelect = True)')
+			shapeCommand.append(f'nodeList[{shapeNodeListIndex}] = mc.createNode({thisShapeType}, n="{transformAndShape[1]}", p="{transformAndShape[0][0]}", skipSelect = True)')
 			#                     nodeList[n]               = mc.createNode("nurbsCurve"   , n="shapeName"             , P="transformName",             skipSelect = True)
-			addToCounter += 1 # shape node
 			skipList.append(transformAndShape[1])
-			nodeListStage2.append(transformAndShape[1])
 			if thisShapeType in ["nurbsCurve, bezierCurve"]:
-				# put setAttr(".cc") command here?
 				# ----------------------------------------------------------------------------------------------
 				# time for om2.MPlug.getSetAttrCmds()
 				getShapeMSL : om2.MSelectionList = om2.MSelectionList().add(transformAndShape[1]+".worldSpace")
@@ -288,14 +316,13 @@ for node in checkList:
 		# enumerate subsequent instances
 		if len(transformAndShape[0]) > 1: # if there are more than one transform nodes gathered 
 			for tf in transformAndShape[0][1:]: #leave out the first one, it's done above
+				nodeListStage2.append(tf) # instance of transform
 				# make instance command
-				nodeList.append(f"mc.instance( nodeList[{nodeListStage2.index(tf)}], n='{tf}', lf=False, st=False) # instance of {transformAndShape[0][0]}")
+				nodeList.append(f"nodeList[{len(nodeListStage2)-1}] = mc.instance( nodeList[{nodeListStage2.index(tf)}], n='{tf}', lf=False, st=False) # instance of {transformAndShape[0][0]}")
 				#                 mc.instance(             nodelist[n]             , n=NAME  , lf=False, st=False)
 				# make reparenting command
 					# this step moved to stage 2 to make querying processed nodes more easily
 				skipList.append(tf)
-				nodeListStage2.append(tf)
-				addToCounter += 1 # +1 instance
 		
 		# script list admin
 			# append all created nodes (except thisNode) into skipList
@@ -304,13 +331,20 @@ for node in checkList:
 		pass
 
 	elif thisNodeType == "joint":
-		# script-only: return name of joints
 		"""
+		//////////////////////////////////////////////////////////////////////
+		joints
+		
+		script-only: return name of joints
+
 		normally work would be done upon an existing skinned model with joints
-		the exceptions would be with copying driver/utility joints, but those should be scripted separately or created manually
+		the exceptions would be with copying driver/utility joints,
+			but those should be scripted separately or created manually
 
 		see also the duplicate hierachy script
+		//////////////////////////////////////////////////////////////////////
 		"""
+
 		# annotate joint connection properties for overview; joint connection commands will still be recorded later
 		# query joint for any connections
 		getConnectionsInbound = mc.listConnections(node, sh=True, s=True, d=False)
@@ -338,17 +372,41 @@ for node in checkList:
 				continue
 			listOutbound.append(grabNodeSelectionString)
 
+		nodeListStage2.append(node) # joint
+		jointListIndex = len(jointList) # new appended index, which is Nth index +1 == len(currentLength)
+			# THIS IS DIFFERENT TO nodeListStage2.append(), objects are appended THEN indexed here,
+			# while jointListIndex is indexed BEFORE appending
 		# add to jointList
-		jointList.append(f'"{node}" # incoming: {listInbound} ; outgoing: {listOutbound}')
+		jointList.append(f'jointList[{jointListIndex}] = "{node}" # incoming: {listInbound} ; outgoing: {listOutbound}')
 		# add to nodeList (for completion's sake)
 		getParent = mc.listRelatives(node, p=True, c=False)[0]
-		jointListIndex = len(jointList)-1
-		nodeList += f"jointList[{jointListIndex}] # joint - {node}"
+		nodeList += f"nodeList[{len(nodeListStage2)-1}] = jointList[{jointListIndex}] # joint - {node}"
 		# f'"{node}" # mc.createNode("joint", n={NAME}, p={parentName}, skipSelect=True)'
-		nodeListStage2.append(node)
 		pass	
+	
 	elif thisNodeType in ['ikHandle', 'ikEffector']: # ikHandle, use dedicated command
+		"""
+		////////////////////////////////////////////////
+		ikHandle and ikEffector, plus curve for splineIK
+
+		mc.ikHandle outputs the following where created:
+		[ikHandle, ikEffector, curve]
+		////////////////////////////////////////////////
+		"""
 		# ['ikRPsolver', 'ikSCsolver', 'ikSplineSolver']
+		
+		handleSolverEffector = [None, None, None]
+		startEndJoints = [None, None]
+
+		if thisNodeType == 'ikHandle':
+			handleSolverEffector[0] = node
+			handleSolverEffector[1] = mc.ikHandle(node, query = True, solver=True)
+			handleSolverEffector[2] = mc.ikHandle(node, query = True, ee=True)
+		if thisNodeType == 'ikEffector':
+			handleSolverEffector[0] =
+			handleSolverEffector[1] =
+			handleSolverEffector[2] = node
+
 		# query start joint
 		# query end joint
 		stu_ikhSolver = mc.ikHandle(node, query = True, solver=True)
@@ -358,8 +416,12 @@ for node in checkList:
 		# naming the variables like this because oh boy i don't want to mix up ikHandle the variable and ikHandle the string and ikHandle the node...
 		
 
+
+		nodeListStage2.append(node) # constraint
+
 		# ////////////////////////////////////////////////////////////////////////////////////
 		nodeListHolder = []
+
 
 		nodeListHolder.append( f"ikhSplineOutput_{nodeCounter} = mc.ikHandle(n='{node}', sj='{stu_ikhStartJoint}', ee='{stu_ikhEndJoint}', solver='{stu_ikhSolver}' )" )
 		#                        ikhSplineOutput_n             = mc.ikHandle(n='handleName', sj='startJoint',      ee='endJoint',          solver='ikSplineSolver')
@@ -371,7 +433,7 @@ for node in checkList:
 		#                        nodeList[n+1]              = ikhSplineOutput_n[1]             # effector
 		# nodeList[n+1] = ikhSplineOutput_n[1] # effector
 		
-		addToCounter +=1 # one extra for invoking the ikHandle creator function
+#		addToCounter +=1 # one extra for invoking the ikHandle creator function
 
 		if stu_ikhSolver == 'ikSplineSolver':
 			nodeListHolder[0] = f"ikhSplineOutput_{nodeCounter} = mc.ikHandle(n='{node}', sj='{stu_ikhStartJoint}', ee='{stu_ikhEndJoint}', solver='ikSplineSolver', simplifyCurve = False )"
@@ -379,7 +441,7 @@ for node in checkList:
 			nodeListHolder.append( f"nodeList[{nodeCounter +2}] = ikhSplineOutput_{nodeCounter}[2] # control curve " )
 			#                        nodeList[n+2]              = ikhSplineOutput_n[2]             # control curve
 			# nodeList[n+2] = ikhSplineOutput_n[2] # control curve
-			addToCounter +=1 # one extra for invoking the ikHandle creator function in splineIK mode
+#			addToCounter +=1 # one extra for invoking the ikHandle creator function in splineIK mode
 
 		# append commands to nodeList
 		nodeList += nodeListHolder
@@ -399,6 +461,12 @@ for node in checkList:
 	"""
 	REFACTOR: iterate through discovered list of nodes from previous step, due to DAG objects and shape/transform node discovery
 	"""
+
+"""
+-----------
+END STAGE 1
+-----------
+"""
 
 # -------------- attribute checking, creation and setting
 checkTransform = [ # transform node
@@ -465,6 +533,13 @@ this method would be more fitting in a case like a snake climbing a tree (where 
 
 both methods aim to solve the problem of needing an up vector along a spline (a spline alone does not have an "upward-ness") 
 """
+
+"""
+
+STAGE 2: attributes and connections and secondary commands
+
+"""
+
 
 nodeListPrintIndex = -1 # lazy indexing
 for node in nodeListStage2:
