@@ -109,6 +109,9 @@ connectionList = []
 nodeCounter = 0
 skipList = [] # for instances like transform nodes where it has already been processed ahread of the list
 
+nurbsCurveDefaultStringCC = "3,1,0,False,3,(0,0,0,1,1,1),6,4,(0,0,0),(0,0,0),(0,0,0),(0,0,0), type='nurbsCurve'"
+# the minimum valid nurbsCurve data for mc.curve(replace=True) to work and not crash maya
+
 for node in checkList:
 	if node in skipList:
 		# node found in skipList, possibly processed in advance
@@ -420,13 +423,73 @@ for node in checkList:
 			transformAndShape[0] = mc.listConnections(handleSolverEffector[0]+'.inCurve', source = True , destination = False)[0]
 			transformAndShape[1] = mc.listConnections(handleSolverEffector[0]+'.inCurve', source = True , destination = False, shapes=True)[0]
 
+			#/////////////////////////////////////////////////
+			# joints: get joint chain and worldspace positions
+			#/////////////////////////////////////////////////
+			# get selection chain between start and end joints
+			startEndJointPaths = [None, None]
+			startEndJointPaths[0] = mc.ls(startEndJoints[0], long=True)[0]
+				# mc.ls() -> ['|joint4']
+				# -[0]-> '|joint4'
+			startEndJointPaths[1] = mc.ls(startEndJoints[1], long=True)[0]
+				# mc.ls() -> ['|joint4|joint5|joint6|joint7|joint8']
+				# -[0]-> '|joint4|joint5|joint6|joint7|joint8'
+			startEndJointPaths[1] = startEndJointPaths[1].replace(startEndJointPaths[0], '', 1)
+				# [0] '|joint4' ; [1] '|joint5|joint6|joint7|joint8'
+			startEndJointPaths[1] = startEndJointPaths[1].split('|')[1:]
+				# ['', 'joint5', 'joint6', 'joint7', 'joint8'][1:]
+			
+			jointAsEPs = []
+			# add EPs in reverse order (it's easier to trim from the back)
+			for i in range(len(startEndJointPaths[1])): 
+				thisJoint = f'{startEndJointPaths[0]}|'
+				for j in startEndJointPaths[1][:(len(startEndJointPaths[1])-i)]:
+					thisJoint += f'|{j}'
+				jointAsEPs.insert(0, mc.xform(thisJoint, q=True, ws=True, t=True))
+			# add EP for the start joint
+			jointAsEPs.insert(0, mc.xform(startEndJointPaths[0], q=True, ws=True, t=True))
+			
+			# multiply EPs by worldInverse of curve transform
+			matA = mc.getAttr(transformAndShape+".worldInverseMatrix")
+			transformedEP = []
+			for ep in jointAsEPs:
+				matB = list(ep)
+				matB.append(1.0)
+				matMult = []
+				matMult.append( matA[ 0]*matB[0] + matA[ 4]*matB[1] + matA[ 8]*matB[2] + matA[12]*matB[3] )
+				matMult.append( matA[ 1]*matB[0] + matA[ 5]*matB[1] + matA[ 9]*matB[2] + matA[13]*matB[3] )
+				matMult.append( matA[ 2]*matB[0] + matA[ 6]*matB[1] + matA[10]*matB[2] + matA[14]*matB[3] )
+				matMult.append( matA[ 3]         + matA[ 7]         + matA[11]         + matA[15]         )
+				
+				# normalise components relative to W and remove W
+				for i in range(len(matMult)-1):
+					matMult[i] = matMult[i] / matMult[-1]
+				
+				transformedEP.append( tuple(matMult[:-1].copy()) )
+			
+
+			#//////////////////////////////////
+			# ikHandle : curve handler override
+			#//////////////////////////////////
+			getCurveTransFormShapeIndex = [None,None]
+			# if curve shape already exist (implies transform node also exists)
 			if transformAndShape[0] in nodeListStage2:
+				# get nodeList index of curveShape and carry on to ikHandle command composer
+				getCurveTransFormShapeIndex[0] = nodeListStage2.index(transformAndShape[0]) # transform for ikHandle
+				getCurveTransFormShapeIndex[1] = nodeListStage2.index(transformAndShape[1]) # shape for rebuilding
+				# override detected curve shape with placeholder
+				makeNode = nodeList[getCurveTransFormShapeIndex[1]].split('\n') # see curve handler
+				makeNode[1] = f"mc.setAttr(node, {nurbsCurveDefaultStringCC}) # splineIK placeholder"
+				nodeList[getCurveTransFormShapeIndex[1]] = f''
+				
+				!! NOT DONE
+				#
+				# nodeList[A], nodelist[B] = mc.ikHandle(n=nameHandle, sj=startJoint, ee=endJoint, solver=ikhSolver, ccv=False, curve = ikCurve)
 				pass
 			else:
+				# enumerate placeholder 
 				pass
 
-			# if curve shape already exist (implies transform node also exists)
-				# get nodeList index of curveShape and carry on to ikHandle command composer
 			# else
 				# create placeholder index for transform node
 				# create placeholder index for shape node
@@ -475,10 +538,6 @@ for node in checkList:
 			# nodeList[n+2] = ikhSplineOutput_n[2] # control curve
 #			addToCounter +=1 # one extra for invoking the ikHandle creator function in splineIK mode
 
-		# append commands to nodeList
-		nodeList += nodeListHolder
-		# append new nodes to stage 2
-		nodeListStage2 += #nodeListHolder
 
 
 	elif thisNodeType in nodeTypeFilterOut: # too complex, require user creation
@@ -571,7 +630,6 @@ both methods aim to solve the problem of needing an up vector along a spline (a 
 STAGE 2: attributes and connections and secondary commands
 
 """
-
 
 nodeListPrintIndex = -1 # lazy indexing
 for node in nodeListStage2:

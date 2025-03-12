@@ -113,6 +113,13 @@ mc.curve(replace=True) has the means to re-create an existing nurbs curve object
 	so one possible strategy would be to make createNode commands first, get the transform, and invoke mc.curve(r=True)
 	with a list of EPs
 
+note0: curve(replace=True) requires a valid non-empty curve.
+	MAYA WILL CRASH ON THE COMMAND when the curve shape do not contain any curve data
+workaround: make the shape node as usual, and immediately apply a valid curve
+mc.setAttr( 'curveShape1.cc', 3,1,0,False,3,(0,0,0,1,1,1),6,4,(0,0,0),(0,0,0),(0,0,0),(0,0,0), type="nurbsCurve")
+	this is a cubic curve with two edit points at (0,0,0)
+
+note1: the points used in curve(replace=True) will be applied local to its transform
 	
 case 0: curve ordered before splineIK in list
 ---------------------------------------------------------------------------------------------------------------
