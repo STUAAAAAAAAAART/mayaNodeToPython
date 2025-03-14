@@ -100,13 +100,13 @@ constructorList = []
 nodeList = []
 nodeListStage2 = [] # in print order, makes referencing them a lot easier here
 jointList = []
+commandList = [] # for creation commands more complex than a single createNode
 constraintList = [] # create constraint nodes AFTER nodeList mc.create()
 parentList = [] # [ [child from nodeList , parent from file ] , ...]
 addAttrList = []
 setAttrList = []
 connectionList = []
 
-nodeCounter = 0
 skipList = [] # for instances like transform nodes where it has already been processed ahread of the list
 
 nurbsCurveDefaultStringCC = "3,1,0,False,3,(0,0,0,1,1,1),6,4,(0,0,0),(0,0,0),(0,0,0),(0,0,0), type='nurbsCurve'"
@@ -131,9 +131,9 @@ for node in checkList:
 	# ============= write createNode / creation commands
 	thisNodeType = mc.nodeType(node)
 	
-	#/////////////////////
+	#//////////////////////
 	# transform constraints
-	#/////////////////////
+	#//////////////////////
 	if thisNodeType in nodeTypeUseCommandsConstraint: # constraints, use dedicated commands
 		
 		stu_constraintChild = mc.listConnections(node+'.constraintParentInverseMatrix', source = True , destination = False)[0]
@@ -544,11 +544,13 @@ for node in checkList:
 		# ---------------------------
 			# i am not writing the entire command on one line
 
+		commandList += ikCommands # merge composed IK commands to commandList
+
 	#////////////////////////////////////////////////////
 	# other complex nodes with no handler (at the moment) 
 	#////////////////////////////////////////////////////
 
-	elif thisNodeType in nodeTypeFilterOut: # too complex, require user creation
+	elif thisNodeType in nodeTypeFilterOut: # too complex, require user creation (see declaration above)
 		nodeListStage2.append(node)
 		nodeList.append(f'nodeList[n] = "{node}" # <- nodetype: {thisNodeType}')
 		#                 nodeList[n] = "nodeName" # <- nodetype: 'nodeType'
@@ -559,13 +561,9 @@ for node in checkList:
 
 	else: # normal case
 		nodeListStage2.append(node)
-		nodeList.append(f'nodeList[{nodeCounter}] = mc.createNode("{thisNodeType}", n="{node}", skipSelect = True)')
-		#                 nodeList[n]             = mc.createNode("nodeType"      , n="nName" , skipSelect = True)
+		nodeList.append(f'nodeList[{len(nodeListStage2)-1}] = mc.createNode("{thisNodeType}", n="{node}", skipSelect = True)')
+		#                 nodeList[n]                       = mc.createNode("nodeType"      , n="nName" , skipSelect = True)
 		# nodeList[n] = mc.createNode("nodeType", n="nName", skipSelect = True)
-
-	"""
-	REFACTOR: iterate through discovered list of nodes from previous step, due to DAG objects and shape/transform node discovery
-	"""
 
 """
 -----------
@@ -816,19 +814,20 @@ for node in nodeListStage2:
 	mc.connectAttr("  connection operator  ")
 	/////////////////////////////////////////
 	"""
-	# ============= query outgoing connections
+
+	# types of nodes to skip:
 	if thisNodeType in nodeTypeUseCommandsConstraint:
 		# constraint node override, connections already made
-#		nodeCounter += addToCounter
 		continue
 	if thisNodeType in nodeTypeSkip:
 		# other types of nodes to skip, see declaration above
-#		nodeCounter += addToCounter
 		continue
 	
+	# query outgoing connections
 	queryConnections = mc.listConnections(node, s=False, c=True,  d=True, p=True )  # -> list : ["shortName_from.attr", "shortName_to.attr", ... , ... ]
 		# downstream command
-		
+	thisNodeIndex = nodeListPrintIndex
+
 	for i in range(int(len(queryConnections)*0.5)): # -> "shortName_from.attr"
 		# note: script has been working with shortnames the whole time,
 			# ensure node names are all consistently shortNames or longNames (and not a mix of both)
@@ -854,12 +853,12 @@ for node in nodeListStage2:
 			holdIndex = nodeListStage2.index(queryConnectedNode[0])
 				# error case ("thing" is not in list) should not occur because it's filtered earlier
 
-			fromNode = 'f"{' + f"nodeList[{nodeCounter}]" + '}' + f'.{queryConnections[i+i  ].split(".")[1]}"'
-			#           f"{      nodeList[      n      ]     }      .                         attribute     "
+			fromNode = 'f"{' + f"nodeList[{thisNodeIndex}]" + '}' + f'.{queryConnections[i+i  ].split(".")[1]}"'
+			#           f"{      nodeList[       n       ]     }      .                         attribute     "
 			# f"{nodeList[n]}.attribute"
 
-			toNode   = 'f"{' + f"nodeList[{holdIndex  }]" + '}' + f'.{queryConnections[i+i+1].split(".")[1]}"'
-			#           f"{      nodeList[      n      ]     }      .                         attribute     "			
+			toNode   = 'f"{' + f"nodeList[{holdIndex    }]" + '}' + f'.{queryConnections[i+i+1].split(".")[1]}"'
+			#           f"{      nodeList[       n       ]     }      .                         attribute     "			
 			# f"{nodeList[n]}.attribute"
 						
 			# write connectAttr commands
@@ -892,6 +891,10 @@ for printOut in jointList:
 fileEnumerator.append("\n# create nodes\n")
 fileEnumerator.append(f"nodeList = list(range({len(nodeListStage2)}))\n")
 for printOut in nodeList:
+	fileEnumerator.append(f"{printOut}\n")
+
+fileEnumerator.append("\n# complex node creation (e.g. ikHandles, constraints)\n")
+for printOut in commandList:
 	fileEnumerator.append(f"{printOut}\n")
 
 fileEnumerator.append("\n# reparent new DAG nodes\n# !!! DOUBLE-CHECK AND EDIT BEFORE RUNNING SCRIPT !!!\n")
