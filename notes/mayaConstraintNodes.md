@@ -92,34 +92,34 @@ query flags require `q=True`
 
 **common flags**
 
-|flag|sN|flag type|parent|aim|orient|point|scale|poleVector|
-|:-|:-|:-|:-:|:-:|:-:|:-:|:-:|:-:|
-|name |`n`|query, create, edit					|O|O|O|O|O|O|
-|offset|`o`| query, create, edit				| |O|O|O|O| |
-|layer |`l`|create, edit						|O|O|O|O|O|O|
-|maintainOffset |`mo`|create					|O|O|O|O|O| |
-|remove |`rm`|edit								|O|O|O|O|O|O|
-|targetList |`tl`|query							|O|O|O|O|O|O|
-|weight = 1.0 |`w`|query, create, edit			|O|O|O|O|O|O|
-|weightAliasList |`wal`|query					|O|O|O|O|O|O|
-|skipRotate |`sr`|create, multiuse				|O| | | | | |
-|skipTranslate |`st`|create, multiuse			|O| | | | | |
-|skip|`sk`| create, edit, multiuse				| |O|O|O|O| |
+|flag|sN|query|flag type|parent|aim|orient|point|scale|poleVector|
+|:-|:-|:-:|:-|:-:|:-:|:-:|:-:|:-:|:-:|
+|name |`n`|query| create, edit					|O|O|O|O|O|O|
+|offset|`o`|query| create, edit					| |O|O|O|O| |
+|layer |`l`| |create, edit						|O|O|O|O|O|O|
+|maintainOffset |`mo`| |create					|O|O|O|O|O| |
+|remove |`rm`| |edit							|O|O|O|O|O|O|
+|targetList |`tl`|query| 						|O|O|O|O|O|O|
+|weight = 1.0 |`w`|query| create, edit			|O|O|O|O|O|O|
+|weightAliasList |`wal`|query| 					|O|O|O|O|O|O|
+|skipRotate |`sr`| |create, multiuse			|O| | | | | |
+|skipTranslate |`st`| |create, multiuse			|O| | | | | |
+|skip|`sk`| | create, edit, multiuse			| |O|O|O|O| |
 
 **specific flags**
 
 
-|flag|sN|flag type|parent|aim|orient|point|scale|poleVector|
-|:-|:-|:-|:-:|:-:|:-:|:-:|:-:|:-:|
-|scaleCompensate|`sc`|create, edit				| | | | |O| |
-|createCache |`cc`|edit							|O| |O| | | |
-|deleteCache |`dc`|edit							|O| |O| | | |
-|decompRotationToChild |`dr`|create				|O| | | | | |
-|aimVector|`aim`| query, create, edit			| |O| | | | |
-|upVector|`u`| query, create, edit				| |O| | | | |
-|worldUpObject|`wuo`| query, create, edit		| |O| | | | |
-|worldUpType|`wut`| query, create, edit			| |O| | | | |
-|worldUpVector|`wu`| query, create, edit		| |O| | | | |
+|flag|sN|query|flag type|parent|aim|orient|point|scale|poleVector|
+|:-|:-|:-:|:-|:-:|:-:|:-:|:-:|:-:|:-:|
+|scaleCompensate|`sc`| |create, edit			| | | | |O| |
+|createCache |`cc`| |edit						|O| |O| | | |
+|deleteCache |`dc`| |edit						|O| |O| | | |
+|decompRotationToChild |`dr`| |create			|O| | | | | |
+|aimVector|`aim`|query| create, edit			| |O| | | | |
+|upVector|`u`|query| create, edit				| |O| | | | |
+|worldUpObject|`wuo`|query| create, edit		| |O| | | | |
+|worldUpType|`wut`|query| create, edit			| |O| | | | |
+|worldUpVector|`wu`|query| create, edit			| |O| | | | |
 
 ### attributes
 
