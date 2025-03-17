@@ -71,6 +71,8 @@ attributes of note:
 
 > poleVectorConstraint is a variation on a pointConstraint that is designed explicitly to constrain the pole vector of an ikRPsolver ikHandle to follow one or more target objects
 
+----
+
 # scope reduction
 
 - manually recording all changed values would be overkill, considering most of these values are enumerated according to the transforms involved
@@ -86,6 +88,27 @@ attributes of note:
 
 the `aimConstraint` node will be covered for the sake of completion, although consider using `aimMatrix` first, especially if most of the rig is already maths and matrix driven in the first place
 
+**in summary**:
+- create command
+- check targets(s) and driven objects
+- check where the target(s) constraint weight is connected to
+- `aimConstraint`:
+	- check if `aimVector`, `upVector`, `worldUpType`, `worldUpMatrix`, `worldUpVector` are default values. if there is a change, check if it's connected upstream (if it's connected, skip, otherwise record value and compose `setAttr` command)
+- let the constraint DAG object stay under the driven object (i.e. no reparenting, skip parent checks)
+- skip main addAttr handler
+- skip main setAttr handler
+- skip main connetion handler
+- don't do more than this
+
+**for other handlers**:
+- connection handler:
+	- if any downstream node is of a type of constraint: skip this connection
+- reparenting handler
+	- currently only for transform node handler, but if there ever was a dedicated handler specifically for reparenting: skip this connection
+
+
+----
+
 ## creation command flags
 
 query flags require `q=True`
@@ -95,16 +118,16 @@ query flags require `q=True`
 |flag|sN|query|flag type|parent|aim|orient|point|scale|poleVector|
 |:-|:-|:-:|:-|:-:|:-:|:-:|:-:|:-:|:-:|
 |name |`n`|query| create, edit					|O|O|O|O|O|O|
+|maintainOffset |`mo`| |create					|O|O|O|O|O| |
 |offset|`o`|query| create, edit					| |O|O|O|O| |
 |layer |`l`| |create, edit						|O|O|O|O|O|O|
-|maintainOffset |`mo`| |create					|O|O|O|O|O| |
-|remove |`rm`| |edit							|O|O|O|O|O|O|
 |targetList |`tl`|query| 						|O|O|O|O|O|O|
 |weight = 1.0 |`w`|query| create, edit			|O|O|O|O|O|O|
 |weightAliasList |`wal`|query| 					|O|O|O|O|O|O|
 |skipRotate |`sr`| |create, multiuse			|O| | | | | |
 |skipTranslate |`st`| |create, multiuse			|O| | | | | |
 |skip|`sk`| | create, edit, multiuse			| |O|O|O|O| |
+|remove |`rm`| |edit							|O|O|O|O|O|O|
 
 **specific flags**
 

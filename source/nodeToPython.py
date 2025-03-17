@@ -383,7 +383,7 @@ for node in checkList:
 		getParent = mc.listRelatives(node, p=True, c=False)[0]
 		nodeList += f"nodeList[{len(nodeListStage2)-1}] = jointList[{jointListIndex}] # joint - {node}"
 		# f'"{node}" # mc.createNode("joint", n={NAME}, p={parentName}, skipSelect=True)'
-		pass	
+		pass
 	
 	#////////////////////////////////////////////////
 	# ikHandle and ikEffector, plus curve for splineIK
@@ -650,6 +650,36 @@ for node in nodeListStage2:
 
 	thisNodeType = mc.nodeType(node)
 	
+	if thisNodeType in nodeTypeUseCommandsConstraint:
+		# the creation command handler for constraints
+		
+		constraintType = thisNodeType # thankfully nodeType of constraint == maya command for constraint
+		# command-agnostic way to query target list
+		getTargetIndex = mc.getAttr(node+'.target', mi=True) # multiple instances
+		getTargets = [] # nodeList strings
+		getTargetWeightConnection = []
+		for i in getTargetIndex:
+			# get targets (does not have to be in exact index, so long as it's in order)
+			getTargets.append( mc.listConnections(f"{node}.target[{i}].targetParentMatrix", source=True, destination=False) )
+			queryTargetWeight = mc.listConnections(f"{node}.target[{i}].targetWeight", s=True, d=False, c=True, p=True)
+			
+			# check if targetWeight is connected to command-premade user-defined attribute on self
+			if queryTargetWeight[0].split('.', 1)[0] == queryTargetWeight[1].split('.', 1)[0]: # if true, check where THAT is being connected to
+				# if this connects to itself AGAIN, i am not saving the user from themselves (even if it means that'd be me)
+				# reminder that this script will not be making addAttr commands for constraint nodes
+				getTargetWeightConnection.append( mc.listConnections(queryTargetWeight[1], s=True, d=False, plugs=True)[0] )
+			else: # it's connected to something else directly, get connection
+				getTargetWeightConnection.append( queryTargetWeight[1] )
+			
+
+			# check if target is in nodeList
+			# if target is not in nodelist.... just pass the name verbatim
+				
+
+
+		constraintList.append(f"mc.{constraintType}()") 
+		continue # do not use other handlers, go to next in stage 2 list
+
 	"""
 	////////////////////////////////////////////////////////
 	mc.parent("  reparenting objects on the DAG hierachy  ")
