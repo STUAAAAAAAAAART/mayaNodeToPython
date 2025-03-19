@@ -526,21 +526,24 @@ for node in checkList:
 		nodeListStage2.append(handleSolverEffector[0]) # ikHandle
 		indexHandleEffector[0] = len(nodeListStage2)-1
 		nodeList.append(f"nodeList[{indexHandleEffector[0]}] = {handleSolverEffector[0]} # ikhandle, {handleSolverEffector[1]}")
-		nodeListStage2.append(handleSolverEffector[0]) # ikEffector
+		nodeListStage2.append(handleSolverEffector[2]) # ikEffector
 		indexHandleEffector[1] = len(nodeListStage2)-1
 		nodeList.append(f"nodeList[{indexHandleEffector[1]}] = {handleSolverEffector[1]} # ikEffector")
 
 		# ---------------------------
-		makeCommandIKH = f"nodeList[{indexHandleEffector[0]}], nodeList[{indexHandleEffector[1]}] = "
+		makeCommandIKH = f"nodeList[{indexHandleEffector[0]}], stuTempEffector = "
 		#                  nodeList[A]                       , nodelist[B] = 
 		makeCommandIKH += f"mc.ikHandle(n=nodeList[{indexHandleEffector[0]}], sj=nodeList[{indexJointsStartEnd[0]}], ee=nodeList[{indexJointsStartEnd[1]}], solver='{handleSolverEffector[1]}'{stringIfSplineIK})"
 		#                   mc.ikHandle(n=nodeList[       nameHandle       ], sj=nodeList[       startJoint       ], ee=nodeList[        endJoint        ], solver='        ikhSolver        ', ccv=False, curve = ikCurve)
 		makeCommandIKH += f"\n# ikHandle: {handleSolverEffector[0]} ; start/end joints: {startEndJoints} ; ikSolver: {handleSolverEffector[1]}"
 		if stringIfSplineIK:
 			makeCommandIKH += f" ; splineIK curve: {transformAndShape[0]}"
-		
+		makeCommandIKH += f"\nnodeList[{indexHandleEffector[1]}] = mc.rename(stuTempEffector, nodeList[{indexHandleEffector[1]}]) # ikEffector node - {handleSolverEffector[2]}"
+
+
 		ikCommands.append(makeCommandIKH)
-		# nodeList[A], nodelist[B] = mc.ikHandle(n=nameHandle, sj=startJoint, ee=endJoint, solver=ikhSolver, ccv=False, curve = ikCurve)
+		# nodeList[A], tempEffector = mc.ikHandle(n=nameHandle, sj=startJoint, ee=endJoint, solver=ikhSolver, ccv=False, curve = ikCurve)
+		# nodeList[B] = mc.rename(tempEffector, nodeList[B]) # to maintain original name of effector 
 		# ---------------------------
 			# i am not writing the entire command on one line
 
@@ -655,9 +658,15 @@ for node in nodeListStage2:
 		
 		constraintType = thisNodeType # thankfully nodeType of constraint == maya command for constraint
 		# command-agnostic way to query target list
-		getTargetIndex = mc.getAttr(node+'.target', mi=True) # multiple instances
 		getTargets = [] # nodeList strings
 		getTargetWeightConnection = []
+		getDriven = mc.listConnections(node+'.constraintParentInverseMatrix', s=True, d=False)[0]
+
+		setMaintainOffset = False
+		setSkip = []
+
+		getTargetIndex = mc.getAttr(node+'.target', mi=True) # multiple instances
+		# TODO: check for gap cases (wtf is it doing in a constraint node??)
 		for i in getTargetIndex:
 			# get targets (does not have to be in exact index, so long as it's in order)
 			getTargets.append( mc.listConnections(f"{node}.target[{i}].targetParentMatrix", source=True, destination=False) )
@@ -671,13 +680,15 @@ for node in nodeListStage2:
 			else: # it's connected to something else directly, get connection
 				getTargetWeightConnection.append( queryTargetWeight[1] )
 			
+			
 
 			# check if target is in nodeList
 			# if target is not in nodelist.... just pass the name verbatim
 				
 
 
-		constraintList.append(f"mc.{constraintType}()") 
+		constraintList.append(f"nodeList[{nodeListPrintIndex}] = mc.{constraintType}(  )") 
+		#                       mc.{constraintType}( parent, child , n=nodeList[n], )
 		continue # do not use other handlers, go to next in stage 2 list
 
 	"""
