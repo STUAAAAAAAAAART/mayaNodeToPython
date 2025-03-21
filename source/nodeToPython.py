@@ -662,16 +662,26 @@ for node in nodeListStage2:
 		getTargetWeightConnection = []
 		getDriven = mc.listConnections(node+'.constraintParentInverseMatrix', s=True, d=False)[0]
 
+		# mc.{constraintType}(parent, parent... , child, mo=True/False)
+
 		setMaintainOffset = False
+		setAimConstraint = ""
 		setSkip = []
 
 		getTargetIndex = mc.getAttr(node+'.target', mi=True) # multiple instances
-		# TODO: check for gap cases (wtf is it doing in a constraint node??)
+		# WARNING: if there is a plug instance, but no connections going into this, getAttr WILL STILL RETURN THIS INDEX
+		# also like why is there an empty instance in a constraint node
+		#	i'm opting for this script to not save the user from this situation and just ignore the gaps
+		#	i mean like maya really does not want users to mess with the order going into constraint nodes, so like off-roading with constraints doesn't sound like a good idea
 		for i in getTargetIndex:
 			# get targets (does not have to be in exact index, so long as it's in order)
-			getTargets.append( mc.listConnections(f"{node}.target[{i}].targetParentMatrix", source=True, destination=False) )
+			queryTargets = mc.listConnections(f"{node}.target[{i}].targetParentMatrix", source=True, destination=False)
+			if queryTargets == None:
+				continue # gap case, skip
+			getTargets.append(queryTargets[0])
+
 			queryTargetWeight = mc.listConnections(f"{node}.target[{i}].targetWeight", s=True, d=False, c=True, p=True)
-			
+
 			# check if targetWeight is connected to command-premade user-defined attribute on self
 			if queryTargetWeight[0].split('.', 1)[0] == queryTargetWeight[1].split('.', 1)[0]: # if true, check where THAT is being connected to
 				# if this connects to itself AGAIN, i am not saving the user from themselves (even if it means that'd be me)

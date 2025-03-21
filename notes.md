@@ -24,15 +24,21 @@ nodeList.append( mc.createNode("multMatrix", n="multMatrix4", skipSelect = True)
 # (...)
 ```
 
-## why the use of openMaya for selection?
+## why the use of openMaya for selection instead of mc.ls(sl=True)?
 
 > openMaya's `MSelectionList` returns a pointer to the DG/DAG object, which allows me to rename a node without having to worry about reflecting the name change elsewhere in the other variables or lists
+>
+> it's less relevant here because of the runtime-only nature of the script (i.e. states aren't important or remembered between runs), but it's more of a force of habit i'd like to keep as much as i can
 
 ## why not use openMaya to create nodes?
 
 > this is an area i'm still very unfamiliar with, but as far as i understand: changes to the DAG/DG (the scene) through openMaya is direct and does not write to the undo queue. there are specific functions to make the commands to be registered in maya's history queue, but that is an undertaking i would like to undertake in a proper plugin project rather than do it here
 >
 > so the use of openMaya has mostly been about handling objects in lists and querying attributes or data (i'm reading there are even functions like querying the closest point on a curve without resorting to making a node in the scene for that, so that opens the possibility for openMaya-based parametric models)
+
+## why is the script output `nodeList` in a pre-enumerated list? why not list.append()?
+
+> the aim of the output is to be human-editable, so having each item in the nodeList be directly assigned an index means that i could edit or delete values in an index, and the rest of the list are still maintained. this is important for further commands below using items in the `nodeList` for inputs
 
 ## why did you createNode a curve, assign it two points, then rebuild the curve with the actual points later?
 

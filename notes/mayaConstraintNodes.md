@@ -67,6 +67,54 @@ attributes of note:
 	- defines the normal vector guide of a foward vector aim
 	- see: https://help.autodesk.com/cloudhelp/2022/ENU/Maya-Tech-Docs/Nodes/aimConstraint.html
 
+## aimConstraint
+
+the `aimConstraint` node has multiple ways of enumerating the upward vector of the driven orientation (specified via `.worldUpType`):
+
+> Set the type of the world up vector computation. The worldUpType can have one of 5 values: "scene", "object", "objectrotation", "vector", or "none".
+> 
+> If the value is "scene", the upVector is aligned with the up axis of the scene and worldUpVector and worldUpObject are ignored.
+> 
+> If the value is "object", the upVector is aimed as closely as possible to the origin of the space of the worldUpObject and the worldUpVector is ignored.
+> 
+> If the value is "objectrotation" then the worldUpVector is interpreted as being in the coordinate space of the worldUpObject, transformed into world space and the upVector is aligned as closely as possible to the result.
+> 
+> If the value is "vector", the upVector is aligned with worldUpVector as closely as possible and worldUpMatrix is ignored.
+> 
+> Finally, if the value is "none" no twist calculation is performed by the constraint, with the resulting "upVector" orientation based previous orientation of the constrained object, and the "great circle" rotation needed to align the aim vector with its constraint.
+> 
+> The default worldUpType is "vector". 
+
+- sceneUp
+	- no active controls
+	- up vector is whatever the scene axis is set to (y-up or z-up)
+- objectUp
+	- `worldUpObject` pointer
+	- ignores `worldUpVector`
+	- up vector points towards this object, creating a rotation plane between this object, the target driver, and the driven constrained object
+- objectRotationUp
+	- `worldUpObject-> worldUpMatrix` pointer and `worldUpVector`
+	- up vector inherits the rotational orientation of the up object based on x-axis rotation
+	- the up vector is interpolated by the up object's y and z rotation  (if y or z axis flips the direction where the x axis points, it flips the result up vector)
+	- `worldUpVector` is the up vector the `worldUpObject` orientation is defined by (so not necessarily scene-up is world-up for `worldUpObject`)
+	- > If the value is "objectrotation" then the worldUpVector is interpreted as being in the coordinate space of the worldUpObject, transformed into world space and the upVector is aligned as closely as possible to the result.
+- vector
+	- `worldUpVector`
+	- ignores `worldUpMatrix`
+	- up vector is vector in worldSpace (numerically relative to 0,0,0)
+- none
+	- no active controls
+	- up vector is based on x-axis orientation of constrained object(???)
+	- there is so much flipping i don't even
+	- > if the value is "none" no twist calculation is performed by the constraint, with the resulting "upVector" orientation based previous orientation of the constrained object, and the "great circle" rotation needed to align the aim vector with its constraint.
+
+
+note: maya's MEL command echo for `aimConstraint` is a lot more involved... (needs checking)
+```maya embedded language
+doCreateAimConstraintArgList 1 { "0","0","0","0","1","0","0","0","1","0","0","1","0","1","objectrotation","pCone2","0","0","0","","1" };
+aimConstraint -offset 0 0 0 -weight 1 -aimVector 1 0 0 -upVector 0 1 0 -worldUpType "objectrotation" -worldUpVector 0 1 0 -worldUpObject pCone2;
+```
+
 ## poleVectorConstraint
 
 > poleVectorConstraint is a variation on a pointConstraint that is designed explicitly to constrain the pole vector of an ikRPsolver ikHandle to follow one or more target objects
@@ -85,6 +133,10 @@ attributes of note:
 	- (during the rigging process) the ideal case is to use constraints on a downstream driver, and then blend between this result and the other controllers
 - while every `constraint` node contains a transform (due to constraints being a subclass of the transform node), the transform and its connections will be ignored
 	- (during the rigging process) use a `transform` node or directly make a transform matrix `composeMatrix`, to make things more explicit on the scene hierachy and the node editor. also as a means to survive a deletion request/action of the constraint
+- it is possible to manually enumerate the connections to and from a `constraint` node, but considering that at the very least (using the `poleVectorConstraint` example), a target item contains connections from the target's `.translate`, `.parentMatrix`, `rotatePivot`, `rotatePivotTranslate`, there is just too many to keep track of, and frankly the respective constraint creation commands handle these.
+	- also note that the target connections vary between the types of constraints used.
+- if there is such a situation where a very off-road use of the `constraint` nodes, perhaps a focused script for enumerating just this node would ba a better fit
+	- technically it might be possible to integrate this to the script, but it's going a little supermassive at the moment
 
 the `aimConstraint` node will be covered for the sake of completion, although consider using `aimMatrix` first, especially if most of the rig is already maths and matrix driven in the first place
 
@@ -106,6 +158,40 @@ the `aimConstraint` node will be covered for the sake of completion, although co
 - reparenting handler
 	- currently only for transform node handler, but if there ever was a dedicated handler specifically for reparenting: skip this connection
 
+
+**commands to end up with**
+
+```py
+mc.poleVectorConstraint(poleVector, ikHandle) # no flags
+
+mc.parentConstraint(parent, child, n=constraintNodeName, mo=True) # maintain offset: exact probe involves attributeQuery and possible setAttr for multiple targets: just leave default value
+# mc.setAttr(constraintNodeName.target[n].targetOffsetTranslate, x,y,z) # targetName
+# mc.setAttr(constraintNodeName.target[n].targetOffsetRotate, x,y,z) # targetName
+
+mc.pointConstraint(parent, child, n=constraintNodeName, mo=False) # maintain offset: exact probe involves attributeQuery and possible setAttr for multiple targets: just leave default value
+# mc.setAttr(constraintNodeName.target[n].targetOffset, x,y,z) # targetName
+
+mc.orientConstraint(parent, child, n=constraintNodeName, mo=True) # maintain offset: exact probe involves attributeQuery and possible setAttr for multiple targets: just leave default value
+# mc.setAttr(constraintNodeName.target[n].targetOffset, x,y,z) # targetName
+
+mc.scaleConstraint(parent, child, n=constraintNodeName, mo=True) # maintain offset: exact probe involves attributeQuery and possible setAttr for multiple targets: just leave default value
+# mc.setAttr(constraintNodeName.target[n].targetOffset, x,y,z) # targetName
+
+
+mc.aimConstraint(parent, child, n=constraintNodeName, mo=False, worldUpType='scene') # aim, scene is up
+mc.aimConstraint(parent, child, n=constraintNodeName, mo=False, worldUpType='none') # aim, self is up
+mc.aimConstraint(parent, child, n=constraintNodeName, mo=False, worldUpType='object', worldUpObject=upObject) # regular aim and other object up
+
+
+mc.aimConstraint(parent, child, n=constraintNodeName, mo=False, worldUpType='vector') # aim, vector value from world zero is up
+# mc.connectAttr(incomingPlug.translate, constraintNodeName.worldUpVector, f=True)
+# mc.setAttr(constraintNodeName.worldUpVector, x,y,z)
+
+mc.aimConstraint(parent, child, n=constraintNodeName, mo=False, worldUpType='objectrotation', worldUpObject=upObject) # aim and x-orient
+# mc.connectAttr(incomingPlug.translate, constraintNodeName.worldUpVector, f=True)
+# mc.setAttr(constraintNodeName.worldUpVector, x,y,z)
+
+```
 
 ----
 
