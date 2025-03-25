@@ -135,29 +135,10 @@ for node in checkList:
 	# transform constraints
 	#//////////////////////
 	if thisNodeType in nodeTypeUseCommandsConstraint: # constraints, use dedicated commands
-		
-		stu_constraintChild = mc.listConnections(node+'.constraintParentInverseMatrix', source = True , destination = False)[0]
-			# this might be a bit too complex to cover all possible cases, probably TODO improve this as needed
-		
-		# oh my god, every constraint command has exclusive flags
-		# also the constrain commands create a user-defined attribute
-
-		# query number of targets
-
-		# ///////////////////////////////////////////////////////////////////////////
-		
-		# if many targets: comment and list names
-		nodeList.append(f"mc.{thisNodeType}('!!SELECT PARENT HERE','{stu_constraintChild}', n='{node}' , maintainOffset=False)")
-		# mc.command(selection) # e.g. [parent,child]
-		
-		# if one target: fully enumerate exact command and values
-			# (especially important for poleVectorConstraint because it's being used so frequently with IK systems)
-
-		nodeList.append(f"mc.{thisNodeType}('!!SELECT PARENT HERE','{stu_constraintChild}', n='{node}' , maintainOffset=False)")
-		# mc.command(selection) # e.g. [parent,child]
-
+		# handle creation command in stage 2
+		nodeList.append(f"nodeList[{len(nodeListStage2)}] = '{node}' # {thisNodeType}")
 		nodeListStage2.append(node) # handoff to stage 2 
-		pass
+		continue
 
 	#/////////////////////////////////////////////////////
 	# curve objects, transform node and curve/bezier shapes
@@ -652,7 +633,6 @@ for node in nodeListStage2:
 	nodeListPrintIndex += 1 # index in nodeList output
 
 	thisNodeType = mc.nodeType(node)
-	thisConstraintCommand = ""
 
 	if thisNodeType in nodeTypeUseCommandsConstraint:
 		# the creation command handler for constraints
@@ -671,26 +651,29 @@ for node in nodeListStage2:
 			# mc.connectAttr(uncheckedNode.attr, constraint.worldUpVector, force=True) # node not in selection during runtime
 		#	maintainOffset: just set them to False for now, let the user edit this after editing
 		
+		thisConstraintCommand = ""
 		setMaintainOffset = False
-		setAimConstraint = ""
 		setSkip = []
 		"""
 		getting constrained/driven object
 		"""
 		getDriven = mc.listConnections(node+'.constraintParentInverseMatrix', s=True, d=False)[0]
+		if getDriven in nodeListStage2:
+			getDriven = f"{nodeListStage2.index(getDriven)}"
+		else:
+			getDriven = f"'{getDriven}'"
 
 		"""
 		getting Target object(s)
 		"""
 		# command-agnostic way to query target list
-		getTargets = [] # nodeList strings
-		getTargetWeightConnection = []
-		
 		getTargetIndex = mc.getAttr(node+'.target', mi=True) # multiple instances
 		# WARNING: if there is a plug instance, but no connections going into this, getAttr WILL STILL RETURN THIS INDEX
 		# also like why is there an empty instance in a constraint node
 		#	i'm opting for this script to not save the user from this situation and just ignore the gaps
 		#	i mean like maya really does not want users to mess with the order going into constraint nodes, so like off-roading with constraints doesn't sound like a good idea
+		getTargets = [] # nodeList strings
+		getTargetWeightConnection = []		
 		for i in getTargetIndex:
 			# get targets (does not have to be in exact index, so long as it's in order)
 			queryTargets = mc.listConnections(f"{node}.target[{i}].targetParentMatrix", source=True, destination=False)
@@ -706,11 +689,11 @@ for node in nodeListStage2:
 					targetListIndexNL.append(f"nodeList[{nodeListStage2.index(t)}]")
 				else:
 					# use direct name.....
-					targetListIndexNL.append(t)	
+					targetListIndexNL.append(f"{t}")
 
 			"""
-			targetWeight connection handler subroutine
-			writing the connectAttr command here because the main subroutine in stage 2 is going to ship constraint nodes
+			connectAttr( targetWeight CONNECTION )
+			writing the connectAttr command here because the main subroutine in stage 2 is going to skip constraint nodes
 			"""
 			queryTargetWeight = mc.listConnections(f"{node}.target[{i}].targetWeight", s=True, d=False, c=True, p=True)
 
@@ -724,8 +707,7 @@ for node in nodeListStage2:
 			
 			# if targetWeight is connected:
 			if getTargetWeightConnection[-1]: # if not None, in which case ignore and let it default
-				getWeightConnectionRight = nodeListStage2.index(node)
-				getWeightConnectionRight = f"nodeList[{getWeightConnectionRight}]+'.target[{len(getTargetWeightConnection)-1}.targetWeight]'"
+				getWeightConnectionRight = f"nodeList[{nodeListPrintIndex}]+'.target[{len(getTargetWeightConnection)-1}.targetWeight]'"
 				if getTargetWeightConnection[-1].split('.')[0] in nodeListStage2: # if node is in nodelist
 					# compose connectAttr command
 					getWeightConnectionLeft = nodeListStage2.index(getTargetWeightConnection[-1].split('.')[0])
@@ -742,18 +724,54 @@ for node in nodeListStage2:
 		"""
 		aimConstraint handler
 		"""
+		setAimConstraint = ""
+		getAimObject = ""
 		if constraintType == "aimConstraint":
 			getAimType = mc.getAttr(node+".worldUpType") # CAUTION: ENUM. get as integer, as maya has different enum names depending on language
-			getAimObject = mc.listConnections(node+".worldUpMatrix", s=True, d=False)
-			getAimVectorConnection = mc.listConnections(node+".worldUpVector", s=True, d=False, c=True)
-			pass
-				
-		"""
-		getting constrained/driven object
-		"""
+			# fortunately mc.aimConstraint(worldUpType=) allows integers (enum flags allows integer indices)
+			setAimConstraint = f", worldUpType={getAimType}"
 
-		constraintList.append(f"nodeList[{nodeListPrintIndex}] = mc.{constraintType}(  )") 
-		#                       mc.{constraintType}( parent, child , n=nodeList[n], )
+			getAimObject = mc.listConnections(node+".worldUpMatrix", s=True, d=False)
+			if getAimObject: # if not None
+				# check if object in list
+				getAimObject = getAimObject[0]
+				if getAimObject in nodeListStage2:
+					setAimConstraint += f"worldUpObject=nodeList[{nodeListStage2.index(getAimObject)}]"
+				else:
+					setAimConstraint += f", worldUpObject='{getAimObject}'"
+			
+			getAimVectorConnection = mc.listConnections(node+".worldUpVector", s=True, d=False, c=True)
+			"""
+			connectAttr( AIM VECTOR CONNECTION )
+			"""
+			if getAimVectorConnection: # if not None
+				# check if object in list
+				# ["object.attr"]
+				getAimVectorConnection: str = getAimVectorConnection[0] # "object.attr"
+				aimVectorConnectionRight = f"nodeList[{nodeListPrintIndex}]+'.worldUpVector'"
+				if getAimVectorConnection.split('.')[0] in nodeListStage2:
+					aimVectorConnectionLeft = getAimVectorConnection[0].split('.') # ["object","attr"] 
+					aimVectorConnectionLeft[0] = nodeListStage2.index(getAimVectorConnection[0]) # [nodeList[n],"attr"]
+					aimVectorConnectionLeft = f"{aimVectorConnectionLeft[0]}.{aimVectorConnectionLeft[1]}"
+					thisConstraintCommand += f"\nmc.connectAttr('{aimVectorConnectionLeft}', {aimVectorConnectionRight}, force=True) # aim worldUpVector: {getAimVectorConnection}"
+				else:
+					# just print the name...
+					thisConstraintCommand += f"\nmc.connectAttr('{getAimVectorConnection}', {aimVectorConnectionRight}, force=True)"
+			pass
+
+		commandObjects = ""
+		for i in getTargets:
+			commandObjects += f"{i}, " # "parent, parent, parent..."
+		commandObjects += getDriven # "child,"
+		mainConstraintCommand = f"nodeList[{nodeListPrintIndex}] = mc.{constraintType}({commandObjects}, n=nodeList[{nodeListPrintIndex}], mo={setMaintainOffset} {setAimConstraint}) # {node}"
+								# nodeList[          n         ] = mc.aimConstraint(    parent, child,   n=nodeList[          n         ], mo=False, worldUpType=2, wouldUpObject="object")
+								# nodeList[          n         ] = mc.pointConstraint(  parent, child,   n=nodeList[          n         ], mo=False   )
+								# nodeList[       n       ] = mc.poleVectorConstraint(poleVector, ikHandle, n=nodeList[       n         ], mo=False   )
+		if getAimObject:
+			mainConstraintCommand += f"; aim worldUpObject {getAimObject}"
+
+		constraintList.append(mainConstraintCommand + thisConstraintCommand) # entire group of constraint command plus relevant setattrs
+
 		continue # do not use other handlers, go to next in stage 2 list
 
 	"""
@@ -939,15 +957,8 @@ for node in nodeListStage2:
 			# ensure node names are all consistently shortNames or longNames (and not a mix of both)
 		queryConnectedNode = queryConnections[i+i+1].split('.',1) # <- "shortName_to.attr" <- ["shortName_to","attr"]
 		if mc.nodeType(queryConnectedNode[0]) in nodeTypeUseCommandsConstraint:
-			# constraint node override:
-			# skip outgoing connections to target nodes (EXCEPT if it's target[n].weight)
-			if "target[" in queryConnectedNode[1] and ".targetWeight" not in queryConnectedNode[1]:
-				# examples to skip:
-				#	node.target[n].targetTranslate
-				#	node.target[n].targetParentMatrix
-				# case to keep:
-				#	node.target[n].targetWeight
-				continue
+			# all connections handled by constraint handler, skip
+			continue
 		
 		# filter out message connections
 		if "message" in queryConnections[i+i  ].split(".",1)[1]:
