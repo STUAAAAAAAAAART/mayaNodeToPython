@@ -42,14 +42,17 @@ try:
 	outFile = open(f"{fileRootPathMa}/{fileNameScriptOut}","x")
 	# x, not w, because w will overrite existing files, while x will only make new ones
 	# also longPath used, relative path would require os.chdir(), depends on how you want to go about doing this
+	outFile.close()
 except:
 	import os
 	if os.stat(f"{fileRootPathMa}/{fileNameScriptOut}").st_size == 0:
 		# open and overwrite, if existing file is 0 bytes
 		outFile = open(f"{fileRootPathMa}/{fileNameScriptOut}","w")
+		outFile.close()
 	else:
 		# there is somehow a file made with the same name down to the second, with existing data
 		raise FileExistsError(f"File exists and not empty: {fileNameScriptOut}")
+
 # ====== file name ready
 
 """
@@ -134,8 +137,9 @@ for node in checkList:
 	#//////////////////////
 	# transform constraints
 	#//////////////////////
+	# handle creation command in stage 2
+	# objects not in list will be given direct string of name instead
 	if thisNodeType in nodeTypeUseCommandsConstraint: # constraints, use dedicated commands
-		# handle creation command in stage 2
 		nodeList.append(f"nodeList[{len(nodeListStage2)}] = '{node}' # {thisNodeType}")
 		nodeListStage2.append(node) # handoff to stage 2 
 		continue
@@ -143,7 +147,7 @@ for node in checkList:
 	#/////////////////////////////////////////////////////
 	# curve objects, transform node and curve/bezier shapes
 	#/////////////////////////////////////////////////////
-	elif thisNodeType in ["nurbsCurve", "bezierCurve"] or thisNodeType == "transform": # nurbsCurve and general transforms
+	if thisNodeType in ["nurbsCurve", "bezierCurve"] or thisNodeType == "transform": # nurbsCurve and general transforms
 		"""
 		CAUTION0: now dealing with DAG paths with relative names and parenting hierachy
 		CAUTION1: now dealing with object instancing, which means many transform nodes can share a single shape node
@@ -162,7 +166,7 @@ for node in checkList:
 		# if node is transform; current state: [[], None] 
 		if thisNodeType == "transform":
 			# get shape
-			thisNodeShapes = mc.listRelatives(n=node, s=True, ni=True)
+			thisNodeShapes = mc.listRelatives(node, s=True, ni=True)
 			# if has shapes:
 			if len(thisNodeShapes) > 0:
 				thisShapeType = mc.nodeType(thisNodeShapes[0])
@@ -230,7 +234,7 @@ for node in checkList:
 				shapeNodeListIndex = len(nodeListStage2)-1
 				# compose shape node
 				shapeCommand = []
-				shapeCommand.append(f'nodeList[{shapeNodeListIndex}] = mc.createNode({thisShapeType}, n="{transformAndShape[1]}", p="{transformAndShape[0][0]}", skipSelect = True)')
+				shapeCommand.append(f'nodeList[{shapeNodeListIndex}] = mc.createNode("{thisShapeType}", n="{transformAndShape[1]}", p=nodeList[{len(nodeListStage2)-2}], skipSelect = True) # transform: {transformAndShape[0][0]}')
 				#                     nodeList[n]               = mc.createNode("nurbsCurve"   , n="shapeName"             , P="transformName",             skipSelect = True)
 				skipList.append(transformAndShape[1])
 				if thisShapeType in ["nurbsCurve, bezierCurve"]:
@@ -335,34 +339,47 @@ for node in checkList:
 		grabNode:om2.MSelectionList = om2.MSelectionList()
 		listInbound = []
 		listOutbound = []
-		for n in getConnectionsInbound:
-			if mc.nodeType(n) == "nodeGraphEditorInfo":
-				continue
-			grabNode.clear()
-			grabNode.add(n)
-			grabNodeSelectionString = grabNode.getSelectionStrings(0)[0]
-			if grabNodeSelectionString in listInbound: # different attribute, but same object/node
-				continue # skip
-			listInbound.append(grabNodeSelectionString)
-		for n in getConnectionsOutbound:
-			if mc.nodeType(n) == "nodeGraphEditorInfo":
-				continue
-			grabNode.clear()
-			grabNode.add(n)
-			grabNodeSelectionString = grabNode.getSelectionStrings(0)[0]
-			if grabNodeSelectionString in listOutbound:
-				continue
-			listOutbound.append(grabNodeSelectionString)
+		
+		if getConnectionsInbound: # if not None
+			for n in getConnectionsInbound:
+				if mc.nodeType(n) == "nodeGraphEditorInfo":
+					continue
+				grabNode.clear()
+				grabNode.add(n)
+				grabNodeSelectionString = grabNode.getSelectionStrings(0)[0]
+				if grabNodeSelectionString in listInbound: # different attribute, but same object/node
+					continue # skip
+				listInbound.append(grabNodeSelectionString)
+		if getConnectionsOutbound: # if not None
+			for n in getConnectionsOutbound:
+				if mc.nodeType(n) == "nodeGraphEditorInfo":
+					continue
+				grabNode.clear()
+				grabNode.add(n)
+				grabNodeSelectionString = grabNode.getSelectionStrings(0)[0]
+				if grabNodeSelectionString in listOutbound:
+					continue
+				listOutbound.append(grabNodeSelectionString)
 
 		nodeListStage2.append(node) # joint
 		jointListIndex = len(jointList) # new appended index, which is Nth index +1 == len(currentLength)
 			# THIS IS DIFFERENT TO nodeListStage2.append(), objects are appended THEN indexed here,
 			# while jointListIndex is indexed BEFORE appending
 		# add to jointList
-		jointList.append(f'jointList[{jointListIndex}] = "{node}" # incoming: {listInbound} ; outgoing: {listOutbound}')
+		writeConnectionsToJL = ""
+		if getConnectionsInbound:
+			writeConnectionsToJL += f"incoming: {listInbound}"
+		if getConnectionsOutbound:
+			writeConnectionsToJL += f" - outgoing: {listOutbound}"
+		if writeConnectionsToJL: # if not empty string ""
+			writeConnectionsToJL = "# " + writeConnectionsToJL
+		jointList.append(f'jointList[{jointListIndex}] = "{node}" {writeConnectionsToJL}')
 		# add to nodeList (for completion's sake)
-		getParent = mc.listRelatives(node, p=True, c=False)[0]
-		nodeList += f"nodeList[{len(nodeListStage2)-1}] = jointList[{jointListIndex}] # joint - {node}"
+		getParent = mc.listRelatives(node, p=True, c=False)
+		writeParentToJL = ""
+		if getParent: # i not None
+			writeParentToJL = f"{getParent[0]}"
+		nodeList.append(f"nodeList[{len(nodeListStage2)-1}] = jointList[{jointListIndex}] # joint - {node}, parent: {writeParentToJL}")
 		# f'"{node}" # mc.createNode("joint", n={NAME}, p={parentName}, skipSelect=True)'
 		pass
 	
@@ -406,7 +423,8 @@ for node in checkList:
 				skipList.append(startEndJoints[i]) # if the script encounters this joint again, it'll skip immediately
 				nodeListStage2.append(startEndJoints[i])
 				indexJointsStartEnd[i] = len(nodeListStage2)-1
-				jointList.append(f"jointList[{len(jointList)}] = '{startEndJoints[i]}' # IK joint {["start","end"][i]} : {handleSolverEffector[0]}")
+				holdText = ["start","end"]
+				jointList.append(f"jointList[{len(jointList)}] = '{startEndJoints[i]}' # IK joint {holdText[i]} : {handleSolverEffector[0]}")
 				nodeList.append(f"nodeList{indexJointsStartEnd[i]} = jointList[{len(jointList)-1}] # joint - {startEndJoints[i]}")
 
 		ikCommands = []
@@ -556,8 +574,9 @@ END STAGE 1
 """
 
 # -------------- attribute checking, creation and setting
+# WARNING WITH TUPLES: (value) IS value, (value,) IS TUPLE CONTAINING value
 checkTransform = [ # transform node
-	('offsetParentMatrix'),
+	('offsetParentMatrix',),
 	('rotate', 'rotateX', 'rotateY', 'rotateZ'),
 	('scale', 'scaleX', 'scaleY', 'scaleZ'),
 	('translate', 'translateX', 'translateY', 'translateZ'),
@@ -573,11 +592,11 @@ checkTransform = [ # transform node
 	('minScaleLimitEnable', 'minScaleXLimitEnable', 'minScaleYLimitEnable', 'minScaleZLimitEnable'),
 	('minTransLimit', 'minTransXLimit', 'minTransYLimit', 'minTransZLimit'),
 	('minTransLimitEnable', 'minTransXLimitEnable', 'minTransYLimitEnable', 'minTransZLimitEnable'),
-	('useObjectColor'),
-	('objectColor'),
+	('useObjectColor',),
+	('objectColor',),
 	('objectColorRGB', 'objectColorR', 'objectColorG', 'objectColorB'),
 	('wireColorRGB', 'wireColorR', 'wireColorG', 'wireColorB'),
-	('useOutlinerColor'),
+	('useOutlinerColor',),
 	('outlinerColor', 'outlinerColorR', 'outlinerColorG', 'outlinerColorB')
 ]
 
@@ -588,24 +607,24 @@ checkCMX = [ # composeMatrix node
 	('inputScale', 'inputScaleX', 'inputScaleY', 'inputScaleZ'),
 	('inputShear', 'inputShearX', 'inputShearY', 'inputShearZ'),
 	('inputTranslate', 'inputTranslateX', 'inputTranslateY', 'inputTranslateZ'),
-	('useEulerRotation')
+	('useEulerRotation',)
 ]
 
 checkIKH = [ # ikHandle target, inherits attributes from transform node
 	('poleVector', 'poleVectorX', 'poleVectorY', 'poleVectorZ'),
-	('snapEnable'),
-	('stickiness'),
-	('twist')
+	('snapEnable',),
+	('stickiness',),
+	('twist',)
 ]
 
 checkSplineIK = [ # splineIK, inherits ikHandle, inherits transform
-	('offset'),
-	('roll'),
+	('offset',),
+	('roll',),
 ]
 
 checkSplineAdvancedIK = [ # splineIK attributes for advanced twist controls
-	('dTwistControlEnable'),
-	('d')
+	('dTwistControlEnable',),
+	('d',)
 ]
 
 """
@@ -781,7 +800,7 @@ for node in nodeListStage2:
 	"""
 	if thisNodeType in ["transform", "ikHandle"]:
 		# get parent
-		getParent = mc.listRelatives('node', p=True, c=False )
+		getParent = mc.listRelatives(node, p=True, c=False )
 		if getParent: # listRelatives has [something] and did not return None
 			getParent = getParent[0]
 			printParent = getParent
@@ -791,7 +810,7 @@ for node in nodeListStage2:
 				getParent = f"'{getParent}'" # 'parentNode'
 			# compose parenting command
 			#                   mc.parent(            "child"              ,  "parent"      )
-			parentList.append(f"mc.parent(f'nodeList[{nodeListPrintIndex}]', {getParent} ) # child: {node} -> parent: {printParent} " )
+			parentList.append(f"mc.parent(nodeList[{nodeListPrintIndex}], {getParent} ) # child: {node} -> parent: {printParent} " )
 			#                   mc.parent(            "child"              , f'nodeList[n]' )
 
 	"""
@@ -809,7 +828,7 @@ for node in nodeListStage2:
 		"""
 
 		# check for INCOMING connections in list of attributes to check
-		getNodeIncomingConnections = mc.listConnections(node, s=False, d=True, p=True, c=True)
+		getNodeIncomingConnections = mc.listConnections(node, s=True, d=False, p=True, c=True)
 		# [thisNode.attr, otherNode.attr, ... ]
 		
 		if getNodeIncomingConnections: # if there are [connecions] and listConnections did not return None
@@ -818,7 +837,7 @@ for node in nodeListStage2:
 				del getNodeIncomingConnections[i+1]
 			# trim strings to just the attribute that has an incoming connection
 			for i in range(len(getNodeIncomingConnections)):
-				getNodeIncomingConnections[i] = getNodeIncomingConnections[i].split['.'][-1]
+				getNodeIncomingConnections[i] = getNodeIncomingConnections[i].split('.')[-1]
 			# [attr, attr, attr, ...]
 		else: # listConnections returned None
 			getNodeIncomingConnections = [] # just to make the following work
@@ -835,10 +854,21 @@ for node in nodeListStage2:
 
 		# for each set of attributes in checker list
 		for attrSet in checkList:
-			if attrSet[0] in getNodeIncomingConnections:
+			if attrSet[0] in getNodeIncomingConnections: # if main attr has incoming connections
 				# main attribute is connected upstream, skip
 				continue
-			if len(attrSet) > 1:
+			
+			# check if main attr has any changes to its value
+			mainAttrMSL : om2.MSelectionList = om2.MSelectionList().add(f"{node}.{attrSet[0]}")
+			mainAttrIsDefault = mainAttrMSL.getPlug(0).isDefaultValue()
+			mainAttrMSL.clear()
+			del mainAttrMSL # cleanup....
+			if mainAttrIsDefault: # if main attribute is all default, i.e. no change in value
+				continue # skip, no point making setAttr for this
+
+			print(f"DEBUGG ==== testing: {node}.{attrSet[0]}")
+
+			if len(attrSet) > 1: # if this attr has subattributes
 				subAttrConnected = True
 				subAttrNotDefault = len(attrSet) -1
 				subAttrMSL : om2.MSelectionList = om2.MSelectionList()
@@ -847,10 +877,10 @@ for node in nodeListStage2:
 					subAttrConnected = subAttrConnected and (attribute in getNodeIncomingConnections)
 					# check if subattribute is default value
 					subAttrMSL.add(f"{node}.{attribute}")
-					if subAttrMSL.getPlug(0).isDefaultValue:
+					if subAttrMSL.getPlug(0).isDefaultValue():
 						subAttrNotDefault -= 1
 					subAttrMSL.clear()
-				del subAttrMSL
+				del subAttrMSL # cleanup....
 				if subAttrConnected or (subAttrNotDefault > 0):
 					# all subattributes are connected, or all subattributes are default
 					continue
@@ -952,43 +982,46 @@ for node in nodeListStage2:
 		# downstream command
 	thisNodeIndex = nodeListPrintIndex
 
-	for i in range(int(len(queryConnections)*0.5)): # -> "shortName_from.attr"
-		# note: script has been working with shortnames the whole time,
-			# ensure node names are all consistently shortNames or longNames (and not a mix of both)
-		queryConnectedNode = queryConnections[i+i+1].split('.',1) # <- "shortName_to.attr" <- ["shortName_to","attr"]
-		if mc.nodeType(queryConnectedNode[0]) in nodeTypeUseCommandsConstraint:
-			# all connections handled by constraint handler, skip
-			continue
-		
-		# filter out message connections
-		if "message" in queryConnections[i+i  ].split(".",1)[1]:
-			continue
+	if queryConnections: # if not None
+		for i in range(int(len(queryConnections)*0.5)): # -> "shortName_from.attr"
+			# note: script has been working with shortnames the whole time,
+				# ensure node names are all consistently shortNames or longNames (and not a mix of both)
+			queryConnectedNode = queryConnections[i+i+1].split('.',1) # <- "shortName_to.attr" <- ["shortName_to","attr"]
+			if mc.nodeType(queryConnectedNode[0]) in nodeTypeUseCommandsConstraint:
+				# all connections handled by constraint handler, skip
+				continue
+			
+			# filter out message connections
+			if "message" in queryConnections[i+i  ].split(".",1)[1]:
+				continue
 
-		# filter out downstream connections that do not connect to selection
-		if queryConnectedNode[0] in nodeListStage2: 
-			# downstream node is in selection scope, append [input, output] to list
-			holdIndex = nodeListStage2.index(queryConnectedNode[0])
-				# error case ("thing" is not in list) should not occur because it's filtered earlier
+			# filter out downstream connections that do not connect to selection
+			if queryConnectedNode[0] in nodeListStage2: 
+				# downstream node is in selection scope, append [input, output] to list
+				holdIndex = nodeListStage2.index(queryConnectedNode[0])
+					# error case ("thing" is not in list) should not occur because it's filtered earlier
 
-			fromNode = 'f"{' + f"nodeList[{thisNodeIndex}]" + '}' + f'.{queryConnections[i+i  ].split(".")[1]}"'
-			#           f"{      nodeList[       n       ]     }      .                         attribute     "
-			# f"{nodeList[n]}.attribute"
+				fromNode = 'f"{' + f"nodeList[{thisNodeIndex}]" + '}' + f'.{queryConnections[i+i  ].split(".")[1]}"'
+				#           f"{      nodeList[       n       ]     }      .                         attribute     "
+				# f"{nodeList[n]}.attribute"
 
-			toNode   = 'f"{' + f"nodeList[{holdIndex    }]" + '}' + f'.{queryConnections[i+i+1].split(".")[1]}"'
-			#           f"{      nodeList[       n       ]     }      .                         attribute     "			
-			# f"{nodeList[n]}.attribute"
-						
-			# write connectAttr commands
-			connectionList.append(f'mc.connectAttr({fromNode}, {toNode}) # {queryConnections[i+i]} -> {queryConnections[i+i+1]}')
+				toNode   = 'f"{' + f"nodeList[{holdIndex    }]" + '}' + f'.{queryConnections[i+i+1].split(".")[1]}"'
+				#           f"{      nodeList[       n       ]     }      .                         attribute     "			
+				# f"{nodeList[n]}.attribute"
+							
+				# write connectAttr commands
+				connectionList.append(f'mc.connectAttr({fromNode}, {toNode}) # {queryConnections[i+i]} -> {queryConnections[i+i+1]}')
 
 
 
 	# next node
-#	nodeCounter += addToCounter
 
 
 
 # ======= start write operation
+
+# blank outFile closed at the top, reopen it
+outFile = open(f"{fileRootPathMa}/{fileNameScriptOut}","w")
 
 fileEnumerator = [
 	"# scripterStu: start print\n",
@@ -1001,17 +1034,19 @@ fileEnumerator = [
 ]
 
 fileEnumerator.append("\n# list of joints\n")
-fileEnumerator.append(f"jointList = list(range({len(jointList)}))\n")
+fileEnumerator.append(f"jointList = [None] * {len(jointList)}\n")
 for printOut in jointList:
 	fileEnumerator.append(f"{printOut}\n")
 
 fileEnumerator.append("\n# create nodes\n")
-fileEnumerator.append(f"nodeList = list(range({len(nodeListStage2)}))\n")
+fileEnumerator.append(f"nodeList = [None] * {len(nodeListStage2)}\n")
 for printOut in nodeList:
 	fileEnumerator.append(f"{printOut}\n")
 
 fileEnumerator.append("\n# complex node creation (e.g. ikHandles, constraints)\n")
 for printOut in commandList:
+	fileEnumerator.append(f"{printOut}\n")
+for printOut in constraintList:
 	fileEnumerator.append(f"{printOut}\n")
 
 fileEnumerator.append("\n# reparent new DAG nodes\n# !!! DOUBLE-CHECK AND EDIT BEFORE RUNNING SCRIPT !!!\n")
