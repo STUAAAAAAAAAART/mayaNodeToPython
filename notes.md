@@ -23,6 +23,7 @@ nodeList.append( mc.createNode("composeMatrix", n="cmx_testRotate", skipSelect =
 nodeList.append( mc.createNode("multMatrix", n="multMatrix4", skipSelect = True) )
 # (...)
 ```
+> the aim of the output is to be human-editable, so having each item in the nodeList be directly assigned an index means that i could edit, reorder, or delete values in an index, and the rest of the list are still maintained. this is important for further commands below using items in the `nodeList` for inputs
 
 ## why the use of openMaya for selection instead of mc.ls(sl=True)?
 
@@ -56,6 +57,17 @@ mc.curve(curveTransformShape[0], replace=True, ep=jointAsEPs, d=3)
 > directly applying curve data can only work with control vertices, so that is a solution that does not fit all tasks that would require passing a curve through specific points in space
 >
 > admittedly mathematical curve definitions is one of the many major gaps in my knowledge, and i am really leaning hard on maya's implementations to solve going between control vertices and edit points. i do wish to be able to get a handle on this one day, so that i could do a platform/engine-agnostic implementation across more programs and environments
+
+## is there a difference between the attributes nurbsCurveShape.worldspace and nurbsCurveShape.local for nurbsCurves?
+
+> there is!!! (this is relating to using `MPlug.getSetAttrCmds()` on the curve shape's `.worldspace` and `.local` attributes, to reverse and inject into a new curve object's shape)
+>
+> the curve data being returned from both attributes are different: the worldSpace data is relative to the scene, and the local data is relative to the object itself
+>
+> for purposes of control re-creation or duplication or applying a shape from pre-saved data, you'd want to query `.local`, as the curve data stored on nurbsCurve shapes are always in local space.
+>
+> `.worldSpace` would help if the curve so happens to be around `[0,0,0]` but has transforms applied to it, possibly in cases where a controller shape is being designed
+
 
 ## why is the script not fully characterising constraint nodes? where are the connection commands for it?
 

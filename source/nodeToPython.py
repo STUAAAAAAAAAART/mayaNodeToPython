@@ -217,7 +217,7 @@ for node in checkList:
 			nodeListStage2.append(transformAndShape[0][0]) # first/original transform node
 			getParent = mc.listRelatives(transformAndShape[0][0])
 			if getParent:
-				getParent = [f'p="{getParent[0]}", ', f'parented under: {getParent[0]}']
+				getParent = [f'p="{getParent[0]}", ', f'parent of shape: {getParent[0]}']
 			else:
 				getParent = ['',''] # None cast to string is the word 'None' -_-
 			nodeList.append(f'nodeList[{len(nodeListStage2)-1}] = mc.createNode("transform", n="{transformAndShape[0][0]}", {getParent[0]} skipSelect = True) # {getParent[1]}')
@@ -235,12 +235,12 @@ for node in checkList:
 				# compose shape node
 				shapeCommand = []
 				shapeCommand.append(f'nodeList[{shapeNodeListIndex}] = mc.createNode("{thisShapeType}", n="{transformAndShape[1]}", p=nodeList[{len(nodeListStage2)-2}], skipSelect = True) # transform: {transformAndShape[0][0]}')
-				#                     nodeList[n]               = mc.createNode("nurbsCurve"   , n="shapeName"             , P="transformName",             skipSelect = True)
+				#                     nodeList[n]                    = mc.createNode("nurbsCurve"     , n="shapeName"             , P="transformName",                   skipSelect = True)
 				skipList.append(transformAndShape[1])
-				if thisShapeType in ["nurbsCurve, bezierCurve"]:
+				if thisShapeType in ["nurbsCurve", "bezierCurve"]:
 					# ----------------------------------------------------------------------------------------------
 					# time for om2.MPlug.getSetAttrCmds()
-					getShapeMSL : om2.MSelectionList = om2.MSelectionList().add(transformAndShape[1]+".worldSpace")
+					getShapeMSL : om2.MSelectionList = om2.MSelectionList().add(transformAndShape[1]+".local")
 					getShapePlug :om2.MPlug = getShapeMSL.getPlug(0)
 					getShapeMSL.clear()
 					del getShapeMSL
@@ -853,60 +853,81 @@ for node in nodeListStage2:
 			checkList = checkCMX
 
 		# for each set of attributes in checker list
+		makeSetAttrSublist = []
+		removeMainSetAttr = False
 		for attrSet in checkList:
 			if attrSet[0] in getNodeIncomingConnections: # if main attr has incoming connections
 				# main attribute is connected upstream, skip
 				continue
 			
+			writeAttrList = []
 			# check if main attr has any changes to its value
 			mainAttrMSL : om2.MSelectionList = om2.MSelectionList().add(f"{node}.{attrSet[0]}")
 			mainAttrIsDefault = mainAttrMSL.getPlug(0).isDefaultValue()
 			mainAttrMSL.clear()
 			del mainAttrMSL # cleanup....
-			if mainAttrIsDefault: # if main attribute is all default, i.e. no change in value
-				continue # skip, no point making setAttr for this
+			if not mainAttrIsDefault: # if not default values
+				writeAttrList.append(attrSet[0]) # "attr"
+				pass
 
-			print(f"DEBUGG ==== testing: {node}.{attrSet[0]}")
+			# one of two states to end up in:
+			# - no connections, has changes
+				# mc.setAttr the entire attribute
+			# - has subattributes, some connections, unconnected attrs has changes
+				# mc.setAttr individual attributes
 
+			isSubAttrMode = False
 			if len(attrSet) > 1: # if this attr has subattributes
-				subAttrConnected = True
-				subAttrNotDefault = len(attrSet) -1
+				subAttrCounter = 0 # count number of setAttr commands being made for subAttrs
 				subAttrMSL : om2.MSelectionList = om2.MSelectionList()
+				
 				for attribute in attrSet[1:]:
-					# check if subattribute is connected
-					subAttrConnected = subAttrConnected and (attribute in getNodeIncomingConnections)
 					# check if subattribute is default value
 					subAttrMSL.add(f"{node}.{attribute}")
-					if subAttrMSL.getPlug(0).isDefaultValue():
-						subAttrNotDefault -= 1
+					# check if subattribute has no incoming connection
+					# AND it's not a default value
+					if (attribute not in getNodeIncomingConnections) and (not subAttrMSL.getPlug(0).isDefaultValue()):
+						writeAttrList.append(attribute) # "subAttr"
+						subAttrCounter += 1
+						isSubAttrMode = True
+					
 					subAttrMSL.clear()
 				del subAttrMSL # cleanup....
-				if subAttrConnected or (subAttrNotDefault > 0):
+				
+				if writeAttrList == []:
 					# all subattributes are connected, or all subattributes are default
 					continue
-					# otherwise just make the entire setAttr command for the main attribute
+				
+				if subAttrCounter == (len(attrSet) -1) : # if there are as many setAttrs as there are subAttrs
+					isSubAttrMode = False
+					del writeAttrList[1:] # dump subAttrs and just write main Attr
 
-			# fall-through case: make setAttr command
-			getAttrValues = mc.getAttr(f'{node}.{attrSet[0]}')
-			if type(getAttrValues) == type(list):
-				# compound attribute, expand listple to single string
-				# [(1.0, 0.0, 0.0)]
-				flatString = ""
-				for val in getAttrValues[0]:
-					flatString += f"{val}, "
-				getAttrValues = flatString.removesuffix(", ")
-			getAttrType = mc.getAttr(f'{node}.{attrSet[0]}', type=True)
-			# compose the command
-			if attrSet[0] == "wireColorRGB":
-				# wireframe command override
-				setAttrList.append(f"mc.color(nodeList[{nodeListStage2.index(node)}], rgb=({getAttrValues}) )")
-				#                    mc.color(               nodeList[n]            , rgb=(      1,0,0    ) )
-				# CAUTION: instances of transfrom objects will share the same wireframe colour in the scene
-				continue
-			setAttrList.append(f"mc.setAttr(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}.{attrSet[0]}', {getAttrValues}, type='{getAttrType}')")
-			#                               f'  {  nodeList[{               n          }]  }  .  attribute '
-			#                    mc.setAttr(                       f'{nodelist[n]}.attribute'               , 1, 2, 3, 4, 5,   type='dataType'     )
+			if isSubAttrMode: # if there are still subAttrs that need writing
+				del writeAttrList[0] # dump mainAttr, split command to few
 
+			# compose setAttr commands
+			for attr in writeAttrList:
+				getAttrType = mc.getAttr(f'{node}.{attr}', type=True)
+				getAttrValues = mc.getAttr(f'{node}.{attr}')
+				attrFlatString = f"{getAttrValues}"
+				if type(getAttrValues) == type(list()):
+					# compound attribute, expand list
+					attrFlatString = attrFlatString[1:-1]
+					if getAttrType in ["double2", "double3", "double4"]:
+						# mc.getAttr apparently returns double3 as a single tuple, within a list-type return??
+						attrFlatString = attrFlatString[1:-1]
+					# "1.0, 0.0, 0.0"
+				# start composing command	
+				if attrSet[0] == "wireColorRGB":
+					# wireframe command override
+					setAttrList.append(f"mc.color(nodeList[{nodeListStage2.index(node)}], rgb=({attrFlatString}) ) # {node}")
+					#                    mc.color(               nodeList[n]            , rgb=(      1,0,0    ) )
+					# CAUTION: instances of transfrom objects will share the same wireframe colour in the scene
+				else:
+					setAttrList.append(f"mc.setAttr(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}.{attr}', {attrFlatString}, type='{getAttrType}') # {node}.{attr}")
+					#                               f'  {  nodeList[             {n}            ]  }  .  attribute '
+					#                    mc.setAttr(                       f'{nodelist[n]}.attribute'         ,  1, 2, 3, 4, 5,   type='dataType'     )
+	pass
 
 	"""
 	/////////////////////////////////////////
