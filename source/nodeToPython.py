@@ -603,7 +603,7 @@ checkTransform = [ # transform node
 checkCMX = [ # composeMatrix node
 	('inputQuat', 'inputQuatX', 'inputQuatY', 'inputQuatZ', 'inputQuatW'),
 	('inputRotate', 'inputRotateX', 'inputRotateY', 'inputRotateZ'),
-	('inputRotateOrder'),
+	('inputRotateOrder',),
 	('inputScale', 'inputScaleX', 'inputScaleY', 'inputScaleZ'),
 	('inputShear', 'inputShearX', 'inputShearY', 'inputShearZ'),
 	('inputTranslate', 'inputTranslateX', 'inputTranslateY', 'inputTranslateZ'),
