@@ -196,14 +196,123 @@ script won't be covering `dt` flags for this case, but i can see a use case for 
 >
 > also i've just realised a `network` node with a `nurbsCurve` attribute would be the most compact representation of holding `nurbsCurve` data without having to create a transform-and-shape curve DAG object... i will have to look into the rammifications of this
 
+# compound attributes
+
+`mc.listAttr(ud=True)` outputs a list where all the subattributes follows the main attribute, so there shouldn't be any case where a parenting flag would target an attribute that hasn't been created yet.
+
+combine the use of `mc.listAttr(ud=True)` and `mc.attributeQuery(lp=True)`, and the command list should practically build itself without much pain
+
+# code snip
+
+if only maya had a native `getAddAttrCmds()` function for enitre DG nodes...
+
+(no not the `om2.MFnAttribute().getAddAttrCmds()` one)
+
+```py
+nodeName = "network2"
+
+newNode = "network3"
+
+for attr in udList:
+	udFlags = ""
+	getAttrType = mc.attributeQuery(attr, n=nodeName, at=True)
+
+	# has custom shortName
+	getShortName = mc.attributeQuery(attr, n=nodeName, sn=True)
+	if attr != getShortName: # shortName defaults to longName if not set
+		udFlags += f", sn='{getShortName}'"
+	# has custom Nice name
+		# skipping this for now. checking this will involve replicating maya's Nice Name syntax
+
+	# parent of main Attr
+	getParent = mc.attributeQuery(attr, n=nodeName, lp=True)
+	if getParent:
+		udFlags += f", p='{getParent[0]}'"
+
+	# float3: is this attribute a colour representation?
+	if mc.attributeQuery(attr, n=nodeName, usedAsColor=True):
+		udFlags += ", uac=True"
+	elif getAttrType == "float3":
+		udFlags += ", uac=False" # leave the flag in there just as a reminder
+	# main compound attribute flag
+	if getAttrType == "compound":
+		udFlags += f", nc='{mc.attributeQuery(attr, n=nodeName, nc=True)[0]}'"
+	# enum attribute: enum value string flag
+	if getAttrType == "enum":
+		udFlags += f", en='{mc.attributeQuery(attr, n=nodeName, listEnum=True)[0]}'"	
+
+	# insert space as attempt fot neat formatting
+	if getParent == None:
+		udFlags += f"{' '*(len(attr)+6)}"
+	udFlags += "  \t" # spacer for ranges and attribute limiters
+
+	# range flags
+	# the following compound or attribute types do not store limits firsthand:
+	if getAttrType not in ["compound","typed","bool","enum", "matrix", "fltMatrix", "char", "time", "message", "reflectance", "spectrum"]:
+		# soft range (slider limits)
+		if mc.attributeQuery(attr, n=nodeName, softMinExists = True):
+			udFlags +=  ", hasSoftMinValue = True"
+			udFlags += f", softMinValue = {mc.attributeQuery(attr, n=nodeName, softMin = True)}"
+		if mc.attributeQuery(attr, n=nodeName, softMaxExists = True):
+			udFlags +=  ", hasSoftMaxValue = True"
+			udFlags += f", softMaxValue = {mc.attributeQuery(attr, n=nodeName, softMax = True)}"
+		# hard range (hard limits)
+		if mc.attributeQuery(attr, n=nodeName, minExists = True):
+			udFlags +=  ", hasMinValue = True"
+			udFlags += f", minValue = {mc.attributeQuery(attr, n=nodeName, softMin = True)}"
+		if mc.attributeQuery(attr, n=nodeName, minExists = True):
+			udFlags +=  ", hasMaxValue = True"
+			udFlags += f", maxValue = {mc.attributeQuery(attr, n=nodeName, softMin = True)}"
+
+	# hidden?
+	holdBool = mc.attributeQuery(attr, n=nodeName, hidden = True)
+	udFlags += f", hidden = {'True'*holdBool}{'False'*(not holdBool)}"
+	# connection settings
+	holdBool = mc.attributeQuery(attr, n=nodeName, readable = True)
+	udFlags += f", readable = {'True'*holdBool}{'False'*(not holdBool)}"
+	holdBool = mc.attributeQuery(attr, n=nodeName, writable = True)
+	udFlags += f", writable = {'True'*holdBool}{'False'*(not holdBool)}"
+	# animatable?
+	holdBool = mc.attributeQuery(attr, n=nodeName, keyable = True)
+	udFlags += f", keyable = {'True'*holdBool}{'False'*(not holdBool)}"
+
+	# attributeType or dataType?
+	if getAttrType == "typed":
+		objAttr = f"{nodeName}.{attr}"
+		getAttrType = f", dt='{mc.getAttr(objAttr, type=True)}'"
+	else:
+		getAttrType=f", at='{getAttrType}'"
+	print(f"mc.addAttr({newNode}, ln='{attr}'{getAttrType}{udFlags})")
+
+# just a quick demonstration of linking compound attributes
+"""
+mc.addAttr('network3', ln='nuTranslate', at='double3'                    	, hidden = False, readable = True, writable = True, keyable = True)
+mc.addAttr('network3', ln='nuTranslateX', at='double', p='nuTranslate'  	, hidden = False, readable = True, writable = True, keyable = True)
+mc.addAttr('network3', ln='nuTranslateY', at='double', p='nuTranslate'  	, hidden = False, readable = True, writable = True, keyable = True)
+mc.addAttr('network3', ln='nuTranslateZ', at='double', p='nuTranslate'  	, hidden = False, readable = True, writable = True, keyable = True)
+mc.addAttr('network3', ln='makeDouble3', at='double3'                    	, hidden = False, readable = True, writable = True, keyable = True)
+mc.addAttr('network3', ln='makeDouble3X', at='double', p='makeDouble3'  	, hidden = False, readable = True, writable = True, keyable = True)
+mc.addAttr('network3', ln='makeDouble3Y', at='double', p='makeDouble3'  	, hidden = False, readable = True, writable = True, keyable = True)
+mc.addAttr('network3', ln='makeDouble3Z', at='double', p='makeDouble3'  	, hidden = False, readable = True, writable = True, keyable = True)
+mc.addAttr('network3', ln='nuDouble3', at='double3'                  	, hidden = False, readable = True, writable = True, keyable = True)
+mc.addAttr('network3', ln='nuDouble3X', at='double', p='nuDouble3'  	, hidden = False, readable = True, writable = True, keyable = True)
+mc.addAttr('network3', ln='nuDouble3Y', at='double', p='nuDouble3'  	, hidden = False, readable = True, writable = True, keyable = True)
+mc.addAttr('network3', ln='nuDouble3Z', at='double', p='nuDouble3'  	, hidden = False, readable = True, writable = True, keyable = True)
+mc.addAttr('network3', ln='nuScalarA', at='double'                  	, hidden = False, readable = True, writable = True, keyable = True)
+mc.addAttr('network3', ln='nuCompound', at='compound', nc='4'                   	, hidden = False, readable = True, writable = True, keyable = False)
+mc.addAttr('network3', ln='nuCompoundInt', at='long', p='nuCompound'  	, hidden = False, readable = True, writable = True, keyable = False)
+mc.addAttr('network3', ln='nuCompoundFloat', at='double', p='nuCompound'  	, hidden = False, readable = True, writable = True, keyable = False)
+mc.addAttr('network3', ln='nuCompoundTiny', at='compound', p='nuCompound', nc='2'  	, hidden = False, readable = True, writable = True, keyable = False)
+mc.addAttr('network3', ln='nuCompoundTinyU', at='double', p='nuCompoundTiny'  	, hidden = False, readable = True, writable = True, keyable = False)
+mc.addAttr('network3', ln='nuCompoundTinyV', at='double', p='nuCompoundTiny'  	, hidden = False, readable = True, writable = True, keyable = False)
+mc.addAttr('network3', ln='nuCompoundFour', at='bool', p='nuCompound'  	, hidden = False, readable = True, writable = True, keyable = False)
+mc.addAttr('network3', ln='nuNurbsCurve', dt='nurbsCurve'                     	, hidden = False, readable = True, writable = True, keyable = False)
+mc.addAttr('network3', ln='letterEnum', at='enum', en='A:B:C:D:E'                   	, hidden = False, readable = True, writable = True, keyable = False)
+mc.addAttr('network3', ln='weirdEnum', at='enum', en='G:Y:A=50:K=400:F:B=1000'                  	, hidden = False, readable = True, writable = True, keyable = True)
+"""
+```
+
+
 # scope reduction
 
-realistically speaking in context to rig controls: deal with the following:
-- vectors
-- scalars (ints, floats/doubles)
-- bools
-- enums
-
-while compound attributes has a chance of working, the script at initial scope DOES NOT cover for cases where its children are compound attributes themselves. assuming its child attributes are NOT compound attributes (like vectors) would not cover the back half of its use case, so this will not be covered (or to be added in the future as and when the need arises)
-
-anything else will be printed as a comment. multi-attributes isn't covered for now
+ehh i think it's surmountable enough to contain all its use cases?

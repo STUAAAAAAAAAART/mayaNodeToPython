@@ -935,55 +935,84 @@ for node in nodeListStage2:
 	/////////////////////////////////////////
 	"""
 	# ============= check for user-defined attributes and write addAttr commands
-	checkAttrUD = mc.listAttr(node, userDefined=True)
+	udList = mc.listAttr(node, userDefined=True)
 		# WARNING: returns noneType if list is empty
-	if checkAttrUD: # if not None, basically
-		for attr in checkAttrUD:
-			# query custom attr type
-			checkAttrType = mc.attributeQuery(attr, n=node, attributeType = True)
-			if checkAttrType in ["float","double","byte","short","long","char"]:
-			# query attribute attributes (:shrug:)
-				flagString = ""
-				# default value
-				flagString += f", defaultValue = {mc.attributeQuery(attr, n=node, listDefault = True)[0]}"
-				# soft range (attribute sliders)
+	if udList: # if not None, just to skip this entire block if there are none
+		printAddAttrs = f"# Dynamic Attributes for nodeList[{nodeListPrintIndex}] : {node} ========================== "
+		for attr in udList:
+			udFlags = ""
+			getAttrType = mc.attributeQuery(attr, n=node, at=True)
+
+			# has custom shortName
+			getShortName = mc.attributeQuery(attr, n=node, sn=True)
+			if attr != getShortName: # shortName defaults to longName if not set
+				udFlags += f", sn='{getShortName}'"
+			# has custom Nice name
+				# skipping this for now. checking this will involve replicating maya's Nice Name syntax
+
+			# parent of main Attr
+			getParent = mc.attributeQuery(attr, n=node, lp=True)
+			if getParent:
+				udFlags += f", p='{getParent[0]}'"
+
+			# float3: is this attribute a colour representation?
+			if mc.attributeQuery(attr, n=node, usedAsColor=True):
+				udFlags += ", uac=True"
+			elif getAttrType == "float3":
+				udFlags += ", uac=False" # leave the flag in there just as a reminder
+			# main compound attribute flag
+			if getAttrType == "compound":
+				udFlags += f", nc='{mc.attributeQuery(attr, n=node, nc=True)[0]}'"
+			# enum attribute: enum value string flag
+			if getAttrType == "enum":
+				udFlags += f", en='{mc.attributeQuery(attr, n=node, listEnum=True)[0]}'"	
+
+			# insert space as attempt fot neat formatting
+			if getParent == None:
+				udFlags += f"{' '*(len(attr)+6)}"
+			udFlags += "  \t" # spacer for ranges and attribute limiters
+
+			# range flags
+			# the following compound or attribute types do not store limits firsthand:
+			if getAttrType not in ["compound","typed","bool","enum", "matrix", "fltMatrix", "char", "time", "message", "reflectance", "spectrum"]:
+				# soft range (slider limits)
 				if mc.attributeQuery(attr, n=node, softMinExists = True):
-					flagString += f", hasSoftMinValue = True, "
-					flagString += f", softMinValue = {mc.attributeQuery(attr, n=node, softMin = True)}"
+					udFlags +=  ", hasSoftMinValue = True"
+					udFlags += f", softMinValue = {mc.attributeQuery(attr, n=node, softMin = True)}"
 				if mc.attributeQuery(attr, n=node, softMaxExists = True):
-					flagString += f", hasSoftMaxValue = True, "
-					flagString += f", softMaxValue = {mc.attributeQuery(attr, n=node, softMax = True)}"
+					udFlags +=  ", hasSoftMaxValue = True"
+					udFlags += f", softMaxValue = {mc.attributeQuery(attr, n=node, softMax = True)}"
 				# hard range (hard limits)
 				if mc.attributeQuery(attr, n=node, minExists = True):
-					flagString += f", hasMinValue = True, "
-					flagString += f", minValue = {mc.attributeQuery(attr, n=node, softMin = True)}"
+					udFlags +=  ", hasMinValue = True"
+					udFlags += f", minValue = {mc.attributeQuery(attr, n=node, softMin = True)}"
 				if mc.attributeQuery(attr, n=node, minExists = True):
-					flagString += f", hasMaxValue = True, "
-					flagString += f", maxValue = {mc.attributeQuery(attr, n=node, softMin = True)}"
-				# hidden?
-				holdBool = mc.attributeQuery(attr, n=node, hidden = True)
-				flagString += f", hidden = {'True'*holdBool}{'False'*(not holdBool)}"
-				# connection settings
-				holdBool = mc.attributeQuery(attr, n=node, readable = True)
-				flagString += f", readable = {'True'*holdBool}{'False'*(not holdBool)}"
-				holdBool = mc.attributeQuery(attr, n=node, writable = True)
-				flagString += f", writable = {'True'*holdBool}{'False'*(not holdBool)}"
-				# animatable?
-				holdBool = mc.attributeQuery(attr, n=node, keyable = True)
-				flagString += f", keyable = {'True'*holdBool}{'False'*(not holdBool)}"
+					udFlags +=  ", hasMaxValue = True"
+					udFlags += f", maxValue = {mc.attributeQuery(attr, n=node, softMin = True)}"
 
-				# write attAttr command
-				addAttrList.append( f'mc.addAttr("{node}", longName = "{attr}", attributeType = "{checkAttrType}" {flagString})')
+			# hidden?
+			holdBool = mc.attributeQuery(attr, n=node, hidden = True)
+			udFlags += f", hidden = {'True'*holdBool}{'False'*(not holdBool)}"
+			# connection settings
+			holdBool = mc.attributeQuery(attr, n=node, readable = True)
+			udFlags += f", readable = {'True'*holdBool}{'False'*(not holdBool)}"
+			holdBool = mc.attributeQuery(attr, n=node, writable = True)
+			udFlags += f", writable = {'True'*holdBool}{'False'*(not holdBool)}"
+			# animatable?
+			holdBool = mc.attributeQuery(attr, n=node, keyable = True)
+			udFlags += f", keyable = {'True'*holdBool}{'False'*(not holdBool)}"
+
+			# attributeType or dataType?
+			if getAttrType == "typed":
+				objAttr = f"{node}.{attr}"
+				getAttrType = f", dt='{mc.getAttr(objAttr, type=True)}'"
 			else:
-				# complex attribute, manual consideration required for now
-					# it should be surmountable within mc., but that's for another time as other utilities come
-				# TODO: other types:
-					# enum
-						# listEnum = True 
-					# compound
-						# listChildren = True
-						# listSiblings = True
-				addAttrList.append(f'# "{checkAttrType}" type: {node}.{attr}')
+				getAttrType=f", at='{getAttrType}'"
+			printAddAttrs += f"\nmc.addAttr(nodeList[{nodeListPrintIndex}], ln='{attr}'{getAttrType}{udFlags})"
+		
+		addAttrList.append(printAddAttrs)
+		pass
+
 	"""
 	/////////////////////////////////////////
 	mc.connectAttr("  connection operator  ")
@@ -1085,6 +1114,8 @@ for printOut in setAttrList:
 fileEnumerator.append("\n# connect attributes\n")
 for printOut in connectionList:
 	fileEnumerator.append(f"{printOut}\n")
+
+fileEnumerator.append("\n\n# write additional commands below this line? (e.g. skinning splines to driver joints)\n\n")
 
 fileEnumerator.append("\n\n# end of script\n")
 

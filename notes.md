@@ -80,3 +80,7 @@ mc.curve(curveTransformShape[0], replace=True, ep=jointAsEPs, d=3)
 > i'm looking to run this either in the script editor or as a shelf command, and i want to minimise having to deal with relative script imports (either in maya's project environment or the default environment)
 >
 > it's an extremely long read, but it's the only simplest way i can think of that would be a copy-paste-and-run solution
+
+## you know pass does nothing, right?
+
+> yes i know, it's there to mark the end of very long conditionals or loops for my eyes
