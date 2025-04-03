@@ -418,7 +418,14 @@ for node in checkList:
 		for i in [0,1]:	
 			if startEndJoints[i] in nodeListStage2: # joint already enumerated
 				indexJointsStartEnd[i] = nodeListStage2.index(startEndJoints[i])
-				jointList[indexJointsStartEnd[i]] += f" # IK joint : {handleSolverEffector[0]}"
+				# reverse joint index from nodeList back to jointList
+				getJointIndex = None
+				for j in range(len(jointList)):
+					if nodeListStage2[indexJointsStartEnd[i]] in jointList[j]:
+						getJointIndex = j
+						break
+				if f" # IK joint : {handleSolverEffector[0]}" not in jointList[getJointIndex]:
+					jointList[getJointIndex] += f" # IK joint : {handleSolverEffector[0]}"
 			else: # new joint encountered
 				skipList.append(startEndJoints[i]) # if the script encounters this joint again, it'll skip immediately
 				nodeListStage2.append(startEndJoints[i])
@@ -429,7 +436,7 @@ for node in checkList:
 
 		ikCommands = []
 
-		stringIfSplineIK = None
+		stringIfSplineIK = ""
 		transformAndShape = [None, None] # for curve, if this IK system is splineIK
 		#//////////////////////////////////////
 		# mc.ikHandle(    splineIK handler    )
@@ -524,12 +531,14 @@ for node in checkList:
 		indexHandleEffector = [None,None]
 		nodeListStage2.append(handleSolverEffector[0]) # ikHandle
 		indexHandleEffector[0] = len(nodeListStage2)-1
-		nodeList.append(f"nodeList[{indexHandleEffector[0]}] = {handleSolverEffector[0]} # ikhandle, {handleSolverEffector[1]}")
+		nodeList.append(f"nodeList[{indexHandleEffector[0]}] = '{handleSolverEffector[0]}' # ikhandle, {handleSolverEffector[1]}")
 		nodeListStage2.append(handleSolverEffector[2]) # ikEffector
 		indexHandleEffector[1] = len(nodeListStage2)-1
-		nodeList.append(f"nodeList[{indexHandleEffector[1]}] = {handleSolverEffector[1]} # ikEffector")
+		nodeList.append(f"nodeList[{indexHandleEffector[1]}] = '{handleSolverEffector[1]}' # ikEffector")
 
 		# ---------------------------
+		# the stuTempEffector thing: just a temporary holdover to catch the effector node and rename it to its original or indended name
+		# assigning it back to the nodeList item in case of name collisions (mc.rename() will give an alternative name as fallback)
 		makeCommandIKH = f"nodeList[{indexHandleEffector[0]}], stuTempEffector = "
 		#                  nodeList[A]                       , nodelist[B] = 
 		makeCommandIKH += f"mc.ikHandle(n=nodeList[{indexHandleEffector[0]}], sj=nodeList[{indexJointsStartEnd[0]}], ee=nodeList[{indexJointsStartEnd[1]}], solver='{handleSolverEffector[1]}'{stringIfSplineIK})"
@@ -537,7 +546,7 @@ for node in checkList:
 		makeCommandIKH += f"\n# ikHandle: {handleSolverEffector[0]} ; start/end joints: {startEndJoints} ; ikSolver: {handleSolverEffector[1]}"
 		if stringIfSplineIK:
 			makeCommandIKH += f" ; splineIK curve: {transformAndShape[0]}"
-		makeCommandIKH += f"\nnodeList[{indexHandleEffector[1]}] = mc.rename(stuTempEffector, nodeList[{indexHandleEffector[1]}]) # ikEffector node - {handleSolverEffector[2]}"
+		makeCommandIKH += f"\nnodeList[{indexHandleEffector[1]}] = mc.rename(stuTempEffector, nodeList[{indexHandleEffector[1]}]) # ikEffector node - {handleSolverEffector[2]}\n"
 
 
 		ikCommands.append(makeCommandIKH)
@@ -678,7 +687,7 @@ for node in nodeListStage2:
 		"""
 		getDriven = mc.listConnections(node+'.constraintParentInverseMatrix', s=True, d=False)[0]
 		if getDriven in nodeListStage2:
-			getDriven = f"{nodeListStage2.index(getDriven)}"
+			getDriven = f"nodeList[{nodeListStage2.index(getDriven)}]"
 		else:
 			getDriven = f"'{getDriven}'"
 
@@ -700,15 +709,15 @@ for node in nodeListStage2:
 				continue # gap case, skip
 			getTargets.append(queryTargets[0])
 
-			targetListIndexNL = []
+			targetParentsList = []
 			for t in getTargets:
 				# check if target is in nodeList
 				if t in nodeListStage2:
 					# use nodeList Index
-					targetListIndexNL.append(f"nodeList[{nodeListStage2.index(t)}]")
+					targetParentsList.append(f"nodeList[{nodeListStage2.index(t)}]")
 				else:
 					# use direct name.....
-					targetListIndexNL.append(f"{t}")
+					targetParentsList.append(f"'{t}'")
 
 			"""
 			connectAttr( targetWeight CONNECTION )
@@ -720,7 +729,11 @@ for node in nodeListStage2:
 			if queryTargetWeight[0].split('.', 1)[0] == queryTargetWeight[1].split('.', 1)[0]: # if true, check where THAT is being connected to
 				# if this connects to itself AGAIN, i am not saving the user from themselves (even if it means that'd be me)
 				# reminder that this script will not be making addAttr commands for constraint nodes
-				getTargetWeightConnection.append( mc.listConnections(queryTargetWeight[1], s=True, d=False, plugs=True)[0] )
+				queryTargetWeight = mc.listConnections(queryTargetWeight[1], s=True, d=False, plugs=True)
+				if queryTargetWeight: # if not none
+					getTargetWeightConnection.append( queryTargetWeight[0] )
+				else:
+					getTargetWeightConnection.append(None)
 			else: # it's connected to something else directly, get connection
 				getTargetWeightConnection.append( queryTargetWeight[1] )
 			
@@ -732,11 +745,11 @@ for node in nodeListStage2:
 					getWeightConnectionLeft = nodeListStage2.index(getTargetWeightConnection[-1].split('.')[0])
 					getWeightConnectionLeft = f"nodeList[{getWeightConnectionLeft}]+'.{getTargetWeightConnection[-1].split('.')[1]}'"
 
-					thisConstraintCommand += f"\nmc.connectAttr({getWeightConnectionLeft}, {getWeightConnectionRight}, force=True)"
+					connectionList.append( f"mc.connectAttr({getWeightConnectionLeft}, {getWeightConnectionRight}, force=True)" )
 					pass
 				else:
 					# compose setAttr command, but comment-out
-					thisConstraintCommand += f"\n# mc.connectAttr('{getTargetWeightConnection[-1]}', {getWeightConnectionRight}, force=True)"
+					connectionList.append( f"# mc.connectAttr('{getTargetWeightConnection[-1]}', {getWeightConnectionRight}, force=True)" )
 					pass
 	
 			pass	
@@ -772,14 +785,14 @@ for node in nodeListStage2:
 					aimVectorConnectionLeft = getAimVectorConnection[0].split('.') # ["object","attr"] 
 					aimVectorConnectionLeft[0] = nodeListStage2.index(getAimVectorConnection[0]) # [nodeList[n],"attr"]
 					aimVectorConnectionLeft = f"{aimVectorConnectionLeft[0]}.{aimVectorConnectionLeft[1]}"
-					thisConstraintCommand += f"\nmc.connectAttr('{aimVectorConnectionLeft}', {aimVectorConnectionRight}, force=True) # aim worldUpVector: {getAimVectorConnection}"
+					connectionList.append( f"mc.connectAttr('{aimVectorConnectionLeft}', {aimVectorConnectionRight}, force=True) # aim worldUpVector: {getAimVectorConnection}" )
 				else:
 					# just print the name...
-					thisConstraintCommand += f"\nmc.connectAttr('{getAimVectorConnection}', {aimVectorConnectionRight}, force=True)"
+					connectionList.append( f"mc.connectAttr('{getAimVectorConnection}', {aimVectorConnectionRight}, force=True)" )
 			pass
 
 		commandObjects = ""
-		for i in getTargets:
+		for i in targetParentsList:
 			commandObjects += f"{i}, " # "parent, parent, parent..."
 		commandObjects += getDriven # "child,"
 		mainConstraintCommand = f"nodeList[{nodeListPrintIndex}] = mc.{constraintType}({commandObjects}, n=nodeList[{nodeListPrintIndex}], mo={setMaintainOffset} {setAimConstraint}) # {node}"
@@ -1037,10 +1050,10 @@ for node in nodeListStage2:
 			# note: script has been working with shortnames the whole time,
 				# ensure node names are all consistently shortNames or longNames (and not a mix of both)
 			queryConnectedNode = queryConnections[i+i+1].split('.',1) # <- "shortName_to.attr" <- ["shortName_to","attr"]
+			
 			if mc.nodeType(queryConnectedNode[0]) in nodeTypeUseCommandsConstraint:
 				# all connections handled by constraint handler, skip
 				continue
-			
 			# filter out message connections
 			if "message" in queryConnections[i+i  ].split(".",1)[1]:
 				continue
@@ -1060,7 +1073,7 @@ for node in nodeListStage2:
 				# f"{nodeList[n]}.attribute"
 							
 				# write connectAttr commands
-				connectionList.append(f'mc.connectAttr({fromNode}, {toNode}) # {queryConnections[i+i]} -> {queryConnections[i+i+1]}')
+				connectionList.append(f'mc.connectAttr({fromNode}, {toNode},\t f=True) # {queryConnections[i+i]} -> {queryConnections[i+i+1]}')
 
 
 
