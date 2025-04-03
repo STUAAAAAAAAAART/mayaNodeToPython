@@ -179,7 +179,7 @@ for node in checkList:
 				# end up with [[node], None]
 
 		# if node is curve shapes: current state if not transform: [[], None]
-		if thisNodeType in ["nurbsCurve, bezierCurve"]:
+		if thisNodeType in ["nurbsCurve", "bezierCurve"]:
 			thisShapeType = thisNodeType
 			transformAndShape[1] = node
 			# end up with [[], shape]
@@ -400,11 +400,13 @@ for node in checkList:
 			handleSolverEffector[0] = node
 			handleSolverEffector[1] = mc.ikHandle(node, query = True, solver=True)
 			handleSolverEffector[2] = mc.ikHandle(node, query = True, ee=True)
+			skipList.append(handleSolverEffector[2])
 		if thisNodeType == 'ikEffector':
 			handleSolverEffector[0] = mc.listConnections(node+'.handlePath', source = False , destination = True)[0]
 			# ASSUME ONLY 1 HANDLE PER EFFECTOR. come back to this when an in-field exception has been created
 			handleSolverEffector[1] = mc.ikHandle(handleSolverEffector[0], query = True, solver=True)
 			handleSolverEffector[2] = node
+			skipList.append(handleSolverEffector[0])
 
 		startEndJoints[0] = mc.ikHandle(handleSolverEffector[0], query = True, sj=True)
 		startEndJoints[1] = mc.listConnections(handleSolverEffector[2]+'.offsetParentMatrix', source = True , destination = False)[0]
@@ -534,7 +536,7 @@ for node in checkList:
 		nodeList.append(f"nodeList[{indexHandleEffector[0]}] = '{handleSolverEffector[0]}' # ikhandle, {handleSolverEffector[1]}")
 		nodeListStage2.append(handleSolverEffector[2]) # ikEffector
 		indexHandleEffector[1] = len(nodeListStage2)-1
-		nodeList.append(f"nodeList[{indexHandleEffector[1]}] = '{handleSolverEffector[1]}' # ikEffector")
+		nodeList.append(f"nodeList[{indexHandleEffector[1]}] = '{handleSolverEffector[2]}' # ikEffector")
 
 		# ---------------------------
 		# the stuTempEffector thing: just a temporary holdover to catch the effector node and rename it to its original or indended name
