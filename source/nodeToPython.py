@@ -586,7 +586,9 @@ END STAGE 1
 
 # -------------- attribute checking, creation and setting
 # WARNING WITH TUPLES: (value) IS value, (value,) IS TUPLE CONTAINING value
-checkTransform = [ # transform node
+nodeCheckDict = {
+
+'transform': [ # transform node
 	('offsetParentMatrix',),
 	('rotate', 'rotateX', 'rotateY', 'rotateZ'),
 	('scale', 'scaleX', 'scaleY', 'scaleZ'),
@@ -609,9 +611,9 @@ checkTransform = [ # transform node
 	('wireColorRGB', 'wireColorR', 'wireColorG', 'wireColorB'),
 	('useOutlinerColor',),
 	('outlinerColor', 'outlinerColorR', 'outlinerColorG', 'outlinerColorB')
-]
+],
 
-checkCMX = [ # composeMatrix node
+'composeMatrix' : [ # composeMatrix node
 	('inputQuat', 'inputQuatX', 'inputQuatY', 'inputQuatZ', 'inputQuatW'),
 	('inputRotate', 'inputRotateX', 'inputRotateY', 'inputRotateZ'),
 	('inputRotateOrder',),
@@ -619,7 +621,31 @@ checkCMX = [ # composeMatrix node
 	('inputShear', 'inputShearX', 'inputShearY', 'inputShearZ'),
 	('inputTranslate', 'inputTranslateX', 'inputTranslateY', 'inputTranslateZ'),
 	('useEulerRotation',)
-]
+],
+
+'plusMinusAverage' : [ # plusMinusAverage
+	# ADDITIONAL SUBROUTINE FOR input1D input2D input3D IN SCRIPT ITSELF
+	('operation',)
+],
+
+'nultiplyDivide' : [ # multiplyDivide
+	('operation',)
+],
+
+'aimMatrix' : [ # aimMatrix node
+	('primaryInputAxis', 'primaryInputAxisX', 'primaryInputAxisY', 'primaryInputAxisZ'), 
+	('primaryMode',),
+	('primaryTargetVector', 'primaryTargetVectorX', 'primaryTargetVectorY', 'primaryTargetVectorZ'),
+	('secondaryInputAxis', 'secondaryInputAxisX', 'secondaryInputAxisY', 'secondaryInputAxisZ'),
+	('secondaryMode',),
+	('secondaryTargetVector', 'secondaryTargetVectorX', 'secondaryTargetVectorY', 'secondaryTargetVectorZ')
+],
+
+}
+
+
+
+
 
 checkIKH = [ # ikHandle target, inherits attributes from transform node
 	('poleVector', 'poleVectorX', 'poleVectorY', 'poleVectorZ'),
@@ -834,7 +860,7 @@ for node in nodeListStage2:
 	mostly default attributes, should come before connectAttr
 	//////////////////////////////////////////////////////////////
 	"""
-	if thisNodeType in ["transform", "composeMatrix"]:
+	if thisNodeType in nodeCheckDict.keys():
 		"""
 		end up with setAttr commands for attributes not connected and is not default value
 		
@@ -858,14 +884,29 @@ for node in nodeListStage2:
 			getNodeIncomingConnections = [] # just to make the following work
 
 		printSetAttrList = []
-		getPlugHelper : om2.MSelectionList = om2.MSelectionList()
-		checkList = None
 
+		checkList = None # flush
 		# load check attribute list
-		if thisNodeType == "transform":
-			checkList = checkTransform
-		if thisNodeType == "composeMatrix":
-			checkList = checkCMX
+		checkList = list(nodeCheckDict[thisNodeType]).copy()
+
+		# add checks for each plusMinusAverage value
+		if thisNodeType == "plusMinusAverage":
+			pmaList1D = mc.listAttr(node+".input1D", m=True)
+			pmaList2D = mc.listAttr(node+".input2D", m=True)
+			pmaList3D = mc.listAttr(node+".input3D", m=True)
+			
+			if pmaList1D: # if not None
+				for attr in pmaList1D:
+					checkList.append((attr,))
+			if pmaList2D: # if not None
+				len2D = int(len(pmaList2D) /3.0)
+				for i in range(len2D):
+					checkList.append((pmaList2D[i*3],pmaList2D[i*3+1],pmaList2D[i*3+2]))
+			if pmaList3D: # if not None
+				len3D = int(len(pmaList3D) *0.25)
+				for i in range(len3D):
+					checkList.append((pmaList3D[i*4],pmaList3D[i*4+1],pmaList3D[i*4+2],pmaList3D[i*4+3]))
+			pass
 
 		# for each set of attributes in checker list
 		makeSetAttrSublist = []
@@ -922,13 +963,19 @@ for node in nodeListStage2:
 
 			# compose setAttr commands
 			for attr in writeAttrList:
-				getAttrType = mc.getAttr(f'{node}.{attr}', type=True)
+				getAttrType = ""
+				try:
+					getAttrType = mc.getAttr(f'{node}.{attr}', type=True)
+				except: # very specific workaround for plusMinusAverage
+					# 'input2D[n]' -> ['input2D', 'n]'] -> 'input2D' 
+					getAttrType = mc.getAttr(f'{node}.{attr.split("[")[0]}', type=True)
 				getAttrValues = mc.getAttr(f'{node}.{attr}')
 				attrFlatString = f"{getAttrValues}"
 				if type(getAttrValues) == type(list()):
 					# compound attribute, expand list
+					# "[(1.0, 2.0, 3.0)]"
 					attrFlatString = attrFlatString[1:-1]
-					if getAttrType in ["double2", "double3", "double4"]:
+					if getAttrType in ["double2", "double3", "float2", "float3", "long2", "long3", "short2", "short3"]:
 						# mc.getAttr apparently returns double3 as a single tuple, within a list-type return??
 						attrFlatString = attrFlatString[1:-1]
 					# "1.0, 0.0, 0.0"
@@ -947,6 +994,9 @@ for node in nodeListStage2:
 	"""
 	/////////////////////////////////////////
 	mc.addAttr("  user-defined attributes  ")
+
+	mc.setAttr("  recording values of dynamic attributes  ")
+	this is usually manual values, so set them here
 	/////////////////////////////////////////
 	"""
 	# ============= check for user-defined attributes and write addAttr commands
@@ -1004,6 +1054,8 @@ for node in nodeListStage2:
 				if mc.attributeQuery(attr, n=node, minExists = True):
 					udFlags +=  ", hasMaxValue = True"
 					udFlags += f", maxValue = {mc.attributeQuery(attr, n=node, softMin = True)}"
+				# default value
+				udFlags += f", defaultValue = {mc.attributeQuery(attr, n=node, listDefault = True)[0]}"
 
 			# hidden?
 			holdBool = mc.attributeQuery(attr, n=node, hidden = True)
@@ -1018,14 +1070,47 @@ for node in nodeListStage2:
 			udFlags += f", keyable = {'True'*holdBool}{'False'*(not holdBool)}"
 
 			# attributeType or dataType?
+			attrTypeUD = ""
 			if getAttrType == "typed":
 				objAttr = f"{node}.{attr}"
-				getAttrType = f", dt='{mc.getAttr(objAttr, type=True)}'"
+				attrTypeUD = f", dt='{mc.getAttr(objAttr, type=True)}'"
 			else:
-				getAttrType=f", at='{getAttrType}'"
-			printAddAttrs += f"\nmc.addAttr(nodeList[{nodeListPrintIndex}], ln='{attr}'{getAttrType}{udFlags})"
-		
+				attrTypeUD=f", at='{getAttrType}'"
+			printAddAttrs += f"\nmc.addAttr(nodeList[{nodeListPrintIndex}], ln='{attr}'{attrTypeUD}{udFlags})"
+
+			#-------------------
+			# setAttr subroutine
+			#-------------------
+			if mc.getAttr(f"{node}.{attr}", type=True) == "nurbsCurve":
+				# nurbsCurve handler again
+				# make the nurbsCurve setAttr handler subroutine a function, it's not worth this much duplication.
+				# printAddAttrs
+				pass
+			# get attributes that are strictly one-member only
+			setAttrNotTypeUD = getAttrType not in ["compound","typed", "time", "message", "reflectance", "spectrum", "double2", "double3", "float2", "float3", "long2", "long3", "short2", "short3"]
+			setAttrNotConnected = mc.listConnections(f"{node}.{attr}", s=True, d=False) == None
+			if setAttrNotTypeUD and setAttrNotConnected: # if specific attribute type AND is NOT connected
+				udAttrMSL : om2.MSelectionList = om2.MSelectionList().add(f"{node}.{attr}")
+				udAttrIsDefault = udAttrMSL.getPlug(0).isDefaultValue()
+				udAttrMSL.clear()
+				del udAttrMSL
+				if not udAttrIsDefault: # if NOT at default value
+					getAttrValues = mc.getAttr(f'{node}.{attr}')
+					attrFlatString = f"{getAttrValues}"
+					if type(getAttrValues) == type(list()):
+						# compound attribute, expand list
+						# "[(1.0, 2.0, 3.0)]"
+						attrFlatString = attrFlatString[1:-1]
+						if getAttrType in ["double2", "double3", "float2", "float3", "long2", "long3", "short2", "short3"]:
+							# mc.getAttr apparently returns double3 as a single tuple, within a list-type return??
+							attrFlatString = attrFlatString[1:-1]
+					printAddAttrs +=f"\nmc.setAttr(f'{'{'}nodeList[{nodeListPrintIndex}]{'}'}.{attr}', {attrFlatString}, type='{mc.getAttr(f'{node}.{attr}', type=True)}') # dynamic attribute setAttr"
+					# mc.setAttr(f'{nodeList[n]}.attr', value, value, value, type=dataType)
+					pass
+
 		addAttrList.append(printAddAttrs)
+
+
 		pass
 
 	"""
