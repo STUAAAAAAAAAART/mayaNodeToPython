@@ -628,8 +628,15 @@ nodeCheckDict = {
 	('operation',)
 ],
 
-'nultiplyDivide' : [ # multiplyDivide
+'multiplyDivide' : [ # multiplyDivide
 	('operation',)
+],
+
+'pickMatrix' : [ # multiplyDivide
+	('useTranslate',)
+	('useRotate',)
+	('useScale',)
+	('useShear',)
 ],
 
 'aimMatrix' : [ # aimMatrix node
