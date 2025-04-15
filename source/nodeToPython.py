@@ -632,10 +632,15 @@ nodeCheckDict = {
 	('operation',)
 ],
 
-'pickMatrix' : [ # multiplyDivide
-	('useTranslate',)
-	('useRotate',)
-	('useScale',)
+'floatCondition' : [ # floatCondition, a pre-2024 workaround for inverting a boolean
+	('floatA',),
+	('floatB',)
+],
+
+'pickMatrix' : [ # pickMatrix
+	('useTranslate',),
+	('useRotate',),
+	('useScale',),
 	('useShear',)
 ],
 
