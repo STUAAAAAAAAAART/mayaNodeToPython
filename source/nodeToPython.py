@@ -1062,10 +1062,10 @@ for node in nodeListStage2:
 				# hard range (hard limits)
 				if mc.attributeQuery(attr, n=node, minExists = True):
 					udFlags +=  ", hasMinValue = True"
-					udFlags += f", minValue = {mc.attributeQuery(attr, n=node, softMin = True)}"
-				if mc.attributeQuery(attr, n=node, minExists = True):
+					udFlags += f", minValue = {mc.attributeQuery(attr, n=node, min = True)}"
+				if mc.attributeQuery(attr, n=node, maxExists = True):
 					udFlags +=  ", hasMaxValue = True"
-					udFlags += f", maxValue = {mc.attributeQuery(attr, n=node, softMin = True)}"
+					udFlags += f", maxValue = {mc.attributeQuery(attr, n=node, max = True)}"
 				# default value
 				udFlags += f", defaultValue = {mc.attributeQuery(attr, n=node, listDefault = True)[0]}"
 
