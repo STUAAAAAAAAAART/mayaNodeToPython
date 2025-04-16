@@ -1164,11 +1164,11 @@ for node in nodeListStage2:
 				holdIndex = nodeListStage2.index(queryConnectedNode[0])
 					# error case ("thing" is not in list) should not occur because it's filtered earlier
 
-				fromNode = 'f"{' + f"nodeList[{thisNodeIndex}]" + '}' + f'.{queryConnections[i+i  ].split(".")[1]}"'
+				fromNode = 'f"{' + f"nodeList[{thisNodeIndex}]" + '}' + f'.{queryConnections[i+i  ].split(".",1)[1]}"'
 				#           f"{      nodeList[       n       ]     }      .                         attribute     "
 				# f"{nodeList[n]}.attribute"
 
-				toNode   = 'f"{' + f"nodeList[{holdIndex    }]" + '}' + f'.{queryConnections[i+i+1].split(".")[1]}"'
+				toNode   = 'f"{' + f"nodeList[{holdIndex    }]" + '}' + f'.{queryConnections[i+i+1].split(".",1)[1]}"'
 				#           f"{      nodeList[       n       ]     }      .                         attribute     "			
 				# f"{nodeList[n]}.attribute"
 							
