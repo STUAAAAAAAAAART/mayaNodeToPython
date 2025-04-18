@@ -637,6 +637,9 @@ nodeCheckDict = {
 	('floatB',)
 ],
 
+'blendMatrix' : [ # blendMatrix, empty set to force it to check matrix members
+],
+
 'pickMatrix' : [ # pickMatrix
 	('useTranslate',),
 	('useRotate',),
@@ -920,6 +923,19 @@ for node in nodeListStage2:
 					checkList.append((pmaList3D[i*4],pmaList3D[i*4+1],pmaList3D[i*4+2],pmaList3D[i*4+3]))
 			pass
 
+		# add checks for each blendMatrix picker value
+		if thisNodeType == "blendMatrix":
+			bmxList = mc.listAttr(node+".target", m=True)
+			# contains a run of the following 8 for each active item in list:
+			# target[n], 'target[n].targetMatrix', 'target[n].useMatrix', 'target[n].weight', 'target[n].useScale', 'target[n].useTranslate', 'target[n].useShear', 'target[n].useRotate'
+			# skip the first, add the other attributes to checklist
+			if bmxList: # if not None
+				bmxTargets = int(len(bmxList) * 0.125)
+				for i in range(bmxTargets):
+					for j in range(7):
+						checkList.append((bmxList[(i*8) + (j+1)],))
+			pass
+
 		# for each set of attributes in checker list
 		makeSetAttrSublist = []
 		removeMainSetAttr = False
@@ -978,9 +994,10 @@ for node in nodeListStage2:
 				getAttrType = ""
 				try:
 					getAttrType = mc.getAttr(f'{node}.{attr}', type=True)
-				except: # very specific workaround for plusMinusAverage
-					# 'input2D[n]' -> ['input2D', 'n]'] -> 'input2D' 
-					getAttrType = mc.getAttr(f'{node}.{attr.split("[")[0]}', type=True)
+				except: # workarounds for long attributes
+					if thisNodeType == "plusMinusAverage":
+						# 'input2D[n]' -> ['input2D', 'n]'] -> 'input2D'
+						getAttrType = mc.getAttr(f'{node}.{attr.split("[")[0]}', type=True)
 				getAttrValues = mc.getAttr(f'{node}.{attr}')
 				attrFlatString = f"{getAttrValues}"
 				if type(getAttrValues) == type(list()):
