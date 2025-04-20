@@ -173,7 +173,7 @@ for node in checkList:
 			# get shape
 			thisNodeShapes = mc.listRelatives(node, s=True, ni=True)
 			# if has shapes:
-			if len(thisNodeShapes) > 0:
+			if thisNodeShapes: # if not None
 				thisShapeType = mc.nodeType(thisNodeShapes[0])
 				# set transformAndShape[1]
 				transformAndShape[1] = thisNodeShapes[0]
@@ -590,7 +590,7 @@ for i in range(len(recheckTransformList)):
 		parentIndex = nodeListStage2.index(recheckTransformList[i][1])
 		nodeList[recheckTransformList[i][0]] = nodeList[recheckTransformList[i][0]].replace(tfPlaceholderName,f"p=nodeList[{parentIndex}], ")
 	else:
-		nodeList[recheckTransformList[i][0]] = nodeList[recheckTransformList[i][0]].replace(tfPlaceholderName,f"p='{recheckTransformList[i][1]}'")
+		nodeList[recheckTransformList[i][0]] = nodeList[recheckTransformList[i][0]].replace(tfPlaceholderName,f"p='{recheckTransformList[i][1]}', ")
 
 
 """
