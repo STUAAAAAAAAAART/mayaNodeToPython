@@ -124,6 +124,11 @@ creation commands composed here and not in a separate initial loop
 ===================================================================
 """
 
+
+recheckTransformList=[]
+# [[nodeListIndex, parentName], ...]
+tfPlaceholderName = "xxxxxxxxxxxxx"
+
 for node in checkList:
 	if node in skipList:
 		# node found in skipList, possibly processed in advance
@@ -217,7 +222,8 @@ for node in checkList:
 			nodeListStage2.append(transformAndShape[0][0]) # first/original transform node
 			getParent = mc.listRelatives(transformAndShape[0][0])
 			if getParent:
-				getParent = [f'p="{getParent[0]}", ', f'parent of shape: {getParent[0]}']
+				recheckTransformList.append([len(nodeListStage2)-1 , getParent[0]])
+				getParent = [f'{tfPlaceholderName}', f'parent of shape: {getParent[0]}']
 			else:
 				getParent = ['',''] # None cast to string is the word 'None' -_-
 			nodeList.append(f'nodeList[{len(nodeListStage2)-1}] = mc.createNode("transform",\tn=f"{transformAndShape[0][0]}", {getParent[0]} skipSelect = True) # {getParent[1]}')
@@ -578,6 +584,15 @@ for node in checkList:
 		#                 nodeList[n]                       = mc.createNode("nodeType"      ,\tn=f"nName" , skipSelect = True)
 		# nodeList[n] = mc.createNode("nodeType",\tn=f"nName", skipSelect = True)
 
+# find and replace all the parents of the transform nodes
+for i in range(len(recheckTransformList)):
+	if recheckTransformList[i][1] in nodeListStage2:
+		parentIndex = nodeListStage2.index(recheckTransformList[i][1])
+		nodeList[recheckTransformList[i][0]] = nodeList[recheckTransformList[i][0]].replace(tfPlaceholderName,f"p=nodeList[{parentIndex}], ")
+	else:
+		nodeList[recheckTransformList[i][0]] = nodeList[recheckTransformList[i][0]].replace(tfPlaceholderName,f"p='{recheckTransformList[i][1]}'")
+
+
 """
 -----------
 END STAGE 1
@@ -912,9 +927,9 @@ for node in nodeListStage2:
 
 		printSetAttrList = []
 
-		checkList = None # flush
+		checkAttrList = None # flush
 		# load check attribute list
-		checkList = list(nodeCheckDict[thisNodeType]).copy()
+		checkAttrList = list(nodeCheckDict[thisNodeType]).copy()
 
 		# add checks for each plusMinusAverage value
 		if thisNodeType == "plusMinusAverage":
@@ -924,15 +939,15 @@ for node in nodeListStage2:
 			
 			if pmaList1D: # if not None
 				for attr in pmaList1D:
-					checkList.append((attr,))
+					checkAttrList.append((attr,))
 			if pmaList2D: # if not None
 				len2D = int(len(pmaList2D) /3.0)
 				for i in range(len2D):
-					checkList.append((pmaList2D[i*3],pmaList2D[i*3+1],pmaList2D[i*3+2]))
+					checkAttrList.append((pmaList2D[i*3],pmaList2D[i*3+1],pmaList2D[i*3+2]))
 			if pmaList3D: # if not None
 				len3D = int(len(pmaList3D) *0.25)
 				for i in range(len3D):
-					checkList.append((pmaList3D[i*4],pmaList3D[i*4+1],pmaList3D[i*4+2],pmaList3D[i*4+3]))
+					checkAttrList.append((pmaList3D[i*4],pmaList3D[i*4+1],pmaList3D[i*4+2],pmaList3D[i*4+3]))
 			pass
 
 		# add checks for each blendMatrix picker value
@@ -945,13 +960,13 @@ for node in nodeListStage2:
 				bmxTargets = int(len(bmxList) * 0.125)
 				for i in range(bmxTargets):
 					for j in range(7):
-						checkList.append((bmxList[(i*8) + (j+1)],))
+						checkAttrList.append((bmxList[(i*8) + (j+1)],))
 			pass
 
 		# for each set of attributes in checker list
 		makeSetAttrSublist = []
 		removeMainSetAttr = False
-		for attrSet in checkList:
+		for attrSet in checkAttrList:
 			if attrSet[0] in getNodeIncomingConnections: # if main attr has incoming connections
 				# main attribute is connected upstream, skip
 				continue
