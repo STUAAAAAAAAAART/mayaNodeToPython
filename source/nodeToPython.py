@@ -220,8 +220,8 @@ for node in checkList:
 				getParent = [f'p="{getParent[0]}", ', f'parent of shape: {getParent[0]}']
 			else:
 				getParent = ['',''] # None cast to string is the word 'None' -_-
-			nodeList.append(f'nodeList[{len(nodeListStage2)-1}] = mc.createNode("transform", n="{transformAndShape[0][0]}", {getParent[0]} skipSelect = True) # {getParent[1]}')
-			#                 nodeList[n]             = mc.createNode("transform", n="nName"                    , p="parent"    , skipSelect = True)
+			nodeList.append(f'nodeList[{len(nodeListStage2)-1}] = mc.createNode("transform",\tn=f"{transformAndShape[0][0]}", {getParent[0]} skipSelect = True) # {getParent[1]}')
+			#                 nodeList[n]             = mc.createNode("transform",\tn=f"nName"                    , p="parent"    , skipSelect = True)
 
 		# ++++++++++++++++++++++++++++++++++++++++++++++++++++
 		# enumerate shape node
@@ -234,8 +234,8 @@ for node in checkList:
 				shapeNodeListIndex = len(nodeListStage2)-1
 				# compose shape node
 				shapeCommand = []
-				shapeCommand.append(f'nodeList[{shapeNodeListIndex}] = mc.createNode("{thisShapeType}", n="{transformAndShape[1]}", p=nodeList[{len(nodeListStage2)-2}], skipSelect = True) # transform: {transformAndShape[0][0]}')
-				#                     nodeList[n]                    = mc.createNode("nurbsCurve"     , n="shapeName"             , P="transformName",                   skipSelect = True)
+				shapeCommand.append(f'nodeList[{shapeNodeListIndex}] = mc.createNode("{thisShapeType}",\tn=f"{transformAndShape[1]}", p=nodeList[{len(nodeListStage2)-2}], skipSelect = True) # transform: {transformAndShape[0][0]}')
+				#                     nodeList[n]                    = mc.createNode("nurbsCurve"     ,\tn=f"shapeName"             , P="transformName",                   skipSelect = True)
 				skipList.append(transformAndShape[1])
 				if thisShapeType in ["nurbsCurve", "bezierCurve"]:
 					# ----------------------------------------------------------------------------------------------
@@ -574,9 +574,9 @@ for node in checkList:
 
 	else: # normal case
 		nodeListStage2.append(node)
-		nodeList.append(f'nodeList[{len(nodeListStage2)-1}] = mc.createNode("{thisNodeType}", n="{node}", skipSelect = True)')
-		#                 nodeList[n]                       = mc.createNode("nodeType"      , n="nName" , skipSelect = True)
-		# nodeList[n] = mc.createNode("nodeType", n="nName", skipSelect = True)
+		nodeList.append(f'nodeList[{len(nodeListStage2)-1}] = mc.createNode("{thisNodeType}",\tn=f"{node}", skipSelect = True)')
+		#                 nodeList[n]                       = mc.createNode("nodeType"      ,\tn=f"nName" , skipSelect = True)
+		# nodeList[n] = mc.createNode("nodeType",\tn=f"nName", skipSelect = True)
 
 """
 -----------
@@ -608,9 +608,15 @@ nodeCheckDict = {
 	('useObjectColor',),
 	('objectColor',),
 	('objectColorRGB', 'objectColorR', 'objectColorG', 'objectColorB'),
-	('wireColorRGB', 'wireColorR', 'wireColorG', 'wireColorB'),
+	('wireColorRGB',), # maya does not update the scene when the colour is being set/connected through the attribute and not a command call...
+	# ('wireColorRGB', 'wireColorR', 'wireColorG', 'wireColorB'),
 	('useOutlinerColor',),
 	('outlinerColor', 'outlinerColorR', 'outlinerColorG', 'outlinerColorB')
+],
+
+'floatCondition' : [ # floatCondition, a pre-2024 workaround for inverting a boolean
+	('floatA',),
+	('floatB',)
 ],
 
 'composeMatrix' : [ # composeMatrix node
@@ -623,6 +629,13 @@ nodeCheckDict = {
 	('useEulerRotation',)
 ],
 
+'fourByFourMatrix' : [ # fourByFourMatrix
+	('in00',),('in01',),('in02',),('in03',),
+	('in10',),('in11',),('in12',),('in13',),
+	('in20',),('in21',),('in22',),('in23',),
+	('in30',),('in31',),('in32',),('in33',),
+],
+
 'plusMinusAverage' : [ # plusMinusAverage
 	# ADDITIONAL SUBROUTINE FOR input1D input2D input3D IN SCRIPT ITSELF
 	('operation',)
@@ -632,9 +645,8 @@ nodeCheckDict = {
 	('operation',)
 ],
 
-'floatCondition' : [ # floatCondition, a pre-2024 workaround for inverting a boolean
-	('floatA',),
-	('floatB',)
+'inverseMatrix' : [ # inverseMatrix
+	('inputMatrix',),
 ],
 
 'blendMatrix' : [ # blendMatrix, empty set to force it to check matrix members
@@ -861,7 +873,7 @@ for node in nodeListStage2:
 			getParent = getParent[0]
 			printParent = getParent
 			if getParent in nodeListStage2:
-				getParent = f"f'nodeList[{nodeList.index(getParent)}]'" # f'nodeList[n]'
+				getParent = f"nodeList[{nodeListStage2.index(getParent)}]" # f'nodeList[n]'
 			else:
 				getParent = f"'{getParent}'" # 'parentNode'
 			# compose parenting command
@@ -1009,8 +1021,7 @@ for node in nodeListStage2:
 						attrFlatString = attrFlatString[1:-1]
 					# "1.0, 0.0, 0.0"
 				# start composing command	
-				if attrSet[0] == "wireColorRGB":
-					# wireframe command override
+				if attrSet[0] == "wireColorRGB": # wireframe command override
 					setAttrList.append(f"mc.color(nodeList[{nodeListStage2.index(node)}], rgb=({attrFlatString}) ) # {node}")
 					#                    mc.color(               nodeList[n]            , rgb=(      1,0,0    ) )
 					# CAUTION: instances of transfrom objects will share the same wireframe colour in the scene
