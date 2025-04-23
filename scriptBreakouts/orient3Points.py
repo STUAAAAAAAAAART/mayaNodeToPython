@@ -54,7 +54,7 @@ def orient3Point(position, forward, other):
 
 	# Z orient
 	pEval = pFwd - pJnt # [x,y,z,w]
-	orient[2] = np.atan(pEval[1] / pEval[0] ) # z <- y/x
+	orient[2] = np.arctan(pEval[1] / pEval[0] ) # z <- y/x
 	matZ = np.identity(4)
 	cosZ = np.cos(orient[2])
 	sinZ = np.sin(orient[2])
@@ -70,7 +70,7 @@ def orient3Point(position, forward, other):
 
 	# Y orient
 	pEval = pFwd - pJnt # [x,y,z,w]
-	orient[1] = np.atan(-pEval[2] / pEval[0] ) # y <- z/x
+	orient[1] = np.arctan(-pEval[2] / pEval[0] ) # y <- z/x
 	# also not sure why ^this has to be negative? 
 	matY = np.identity(4)
 	cosY = np.cos(orient[1])
@@ -87,7 +87,7 @@ def orient3Point(position, forward, other):
 
 	# X orient
 	pEval = pJnt # [x,y,z,w]
-	orient[0] = np.atan(pEval[2] / pEval[1] ) # x <- y/z
+	orient[0] = np.arctan(pEval[2] / pEval[1] ) # x <- y/z
 	matX = np.identity(4)
 	cosX = np.cos(orient[0])
 	sinX = np.sin(orient[0])
