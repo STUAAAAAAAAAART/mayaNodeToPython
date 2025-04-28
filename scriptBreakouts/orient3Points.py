@@ -41,7 +41,7 @@ def orient3Point(position, forward, other):
 	getParentName = mc.listRelatives(position, p=True)
 	if getParentName: # if not None, contains [string]
 		getParentName = getParentName[0] # unpack string from list
-	getChildrenNames = mc.listRelatives(position, p=True) or [] # just relative names, two nodes with a common parent can not have the same name
+	getChildrenNames = mc.listRelatives(position, c=True) or [] # just relative names, two nodes with a common parent can not have the same name
 	holdSelf : om2.MSelectionList = om2.MSelectionList().add(position) # true pointer to object, not a bare string of temporary name
 	mslChildren : om2.MSelectionList = om2.MSelectionList()
 	for node in getChildrenNames:
