@@ -50,10 +50,10 @@ def orient3Point(position, forward, other, flip=False):
 			orient[i] = orient[i] * toDeg
 
 	# ==== parent handler =============
-	getParentName = mc.listRelatives(position, p=True)
+	getParentName = mc.listRelatives(position, p=True, f=True)
 	if getParentName: # if not None, contains [string]
 		getParentName = getParentName[0] # unpack string from list
-	getChildrenNames = mc.listRelatives(position, c=True) or [] # just relative names, two nodes with a common parent can not have the same name
+	getChildrenNames = mc.listRelatives(position, c=True, f=True) or [] # just relative names, two nodes with a common parent can not have the same name
 	holdSelf : om2.MSelectionList = om2.MSelectionList().add(position) # true pointer to object, not a bare string of temporary name
 	mslChildren : om2.MSelectionList = om2.MSelectionList()
 	for node in getChildrenNames:
@@ -64,18 +64,17 @@ def orient3Point(position, forward, other, flip=False):
 	if getChildrenNames: # if not []
 		mc.parent(*getChildrenNames, w=True) # unparent children
 	if getParentName: # if not None
-		mc.parent(position, w=True) # unparent from parent
+		mc.parent(holdSelf.getSelectionStrings(0), w=True) # unparent from parent
 		
-	mc.joint(position, e=True, o=orient) # apply orient of this joint
+	mc.joint(holdSelf.getSelectionStrings(0), e=True, o=orient) # apply orient of this joint
 
 	if getParentName: # if not None
 		mc.parent(holdSelf.getSelectionStrings(0), getParentName) # reparent to parent
-		mc.rename(holdSelf.getSelectionStrings(0), position) # reassert name
+		mc.rename(holdSelf.getSelectionStrings(0), position.split("|")[-1]) # reassert name
 	if getChildrenNames: # if not []
-		getString = mslChildren.getSelectionStrings()	 
-		mc.parent(*getString, position) # reparent children
+		mc.parent(*mslChildren.getSelectionStrings(), holdSelf.getSelectionStrings(0)) # reparent children
 		for i in range(len(getChildrenNames)): # reassert names
-			mc.rename(getString[i],getChildrenNames[i])
+			mc.rename(mslChildren.getSelectionStrings(i), getChildrenNames[i].split("|")[-1])
 
 	mc.select(activeSelection.getSelectionStrings()) # reassert original scene selection
 	return orient
