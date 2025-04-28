@@ -1,7 +1,7 @@
 import maya.cmds as mc
 import maya.api.OpenMaya as om2
 
-def orient3Point(position, forward, other):
+def orient3Point(position, forward, other, flip=False):
 	try:
 		assert mc.nodeType(position) == "joint" # test if type is joint
 	except:
@@ -15,7 +15,11 @@ def orient3Point(position, forward, other):
 
 	vFwd = (p1-p0).normal() # forward vector
 	vPln = (p2-p0).normal() # coplanar vector
-	vNrm = (vFwd ^ vPln).normal() # planar normal
+	vNrm = None
+	if flip:
+		vNrm = (vPln ^ vFwd).normal() # planar normal
+	else:
+		vNrm = (vFwd ^ vPln).normal() # planar normal
 
 	qFwd = om2.MQuaternion( om2.MVector(1,0,0), vFwd, 1) # initial forward vector
 	qFwdZ = om2.MQuaternion( om2.MVector(1,0,0), om2.MVector(0,0,1), 1) * qFwd # initial forward vector's z-axis
