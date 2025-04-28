@@ -7,6 +7,8 @@ def orient3Point(position, forward, other):
 	except:
 		raise AssertionError(f"input object not a joint: {position}")
 	# ==== maths =============
+	toDeg =    57.29577951308232 # A * 180/pi
+	toRad = 0.017453292519943295 # A * pi/180
 	p0 = om2.MVector( mc.getAttr(f"{position}.worldMatrix")[-4:-1] )
 	p1 = om2.MVector( mc.getAttr(f"{forward }.worldMatrix")[-4:-1] )
 	p2 = om2.MVector( mc.getAttr(f"{other   }.worldMatrix")[-4:-1] )
@@ -29,13 +31,19 @@ def orient3Point(position, forward, other):
 	qAlign = om2.MQuaternion(planeFwdZ, planeNrm, 1) # realignment rotation adjustment
 	qOrient = qFwd * qAlign # coplanar joint orient
 
+	angleUnit = mc.currentUnit(q=True, angle=True)
+	posCurrentRotate = list(mc.getAttr(f"{position}.rotate")[0])
+	if angleUnit == 'deg': # scene units in degrees, convert to radians
+		for i in range (3):
+			posCurrentRotate[i] = posCurrentRotate[i]*toRad
+	posCurrentRotate = om2.MEulerRotation(*posCurrentRotate, om2.MEulerRotation.kXYZ)
+	qOrient = posCurrentRotate.inverse().asQuaternion() * qOrient
+
 	getEuler = qOrient.asEulerRotation()
 	orient = [getEuler.x, getEuler.y, getEuler.z]
-
-	angleUnit = mc.currentUnit(q=True, angle=True)
-	if angleUnit == 'deg': # result in radians, convert to scene units
+	if angleUnit == 'deg': # result in radians, convert to scene units if degrees
 		for i in range(3):
-			orient[i] = om2.MAngle(orient[i],om2.MAngle.kRadians).asDegrees()
+			orient[i] = orient[i] * toDeg
 
 	# ==== parent handler =============
 	getParentName = mc.listRelatives(position, p=True)
@@ -48,6 +56,7 @@ def orient3Point(position, forward, other):
 		mslChildren.add(node)
 	
 	# ==== run =============
+	activeSelection = om2.MGlobal.getActiveSelectionList() # selection sanitisation: gets real current selection, for some reason this script will select the last joint at times 
 	if getChildrenNames: # if not []
 		mc.parent(*getChildrenNames, w=True) # unparent children
 	if getParentName: # if not None
@@ -63,5 +72,6 @@ def orient3Point(position, forward, other):
 		mc.parent(*getString, position) # reparent children
 		for i in range(len(getChildrenNames)): # reassert names
 			mc.rename(getString[i],getChildrenNames[i])
-	
+
+	mc.select(activeSelection.getSelectionStrings()) # reassert original scene selection
 	return orient
