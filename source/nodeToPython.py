@@ -240,7 +240,7 @@ for node in checkList:
 				shapeNodeListIndex = len(nodeListStage2)-1
 				# compose shape node
 				shapeCommand = [] # name changed to follow transform name, very little reason to give it a name completely unique from transform
-				shapeCommand.append(f'nodeList[{shapeNodeListIndex}] = mc.createNode("{thisShapeType}",\tn=f"{'{'}nodeList[{len(nodeListStage2)-2}]{'}'}Shape", p=nodeList[{len(nodeListStage2)-2}], skipSelect = True) # transform: {transformAndShape[0][0]}')
+				shapeCommand.append(f'nodeList[{shapeNodeListIndex}] = mc.createNode("{thisShapeType}",\tn=f"{"{"}nodeList[{len(nodeListStage2)-2}]{"}"}Shape", p=nodeList[{len(nodeListStage2)-2}], skipSelect = True) # transform: {transformAndShape[0][0]}')
 				#                     nodeList[n]                    = mc.createNode("nurbsCurve"     ,\tn=f"shapeName"             , P="transformName",                   skipSelect = True)
 				skipList.append(transformAndShape[1]) # add INPUT SHAPE NODE NAME to skiplist, to check for re-encounters IN CURRENT SCENE
 				if thisShapeType in ["nurbsCurve", "bezierCurve"]:
@@ -1216,7 +1216,12 @@ for node in nodeListStage2:
 				# f"{nodeList[n]}.attribute"
 							
 				# write connectAttr commands
-				connectionList.append(f'mc.connectAttr({fromNode}, {toNode},\t f=True) # {queryConnections[i+i]} -> {queryConnections[i+i+1]}')
+				writeConnectCommand = f'mc.connectAttr({fromNode}, {toNode},\t f=True) # {queryConnections[i+i]} -> {queryConnections[i+i+1]}'
+				if udList:
+					if queryConnections[i+i].split('.')[-1] in udList: # if this attribute is a dynamic attribute: append to addAttr list instead
+						addAttrList.append(writeConnectCommand)
+					else:
+						connectionList.append(writeConnectCommand)
 
 
 
