@@ -1217,11 +1217,12 @@ for node in nodeListStage2:
 							
 				# write connectAttr commands
 				writeConnectCommand = f'mc.connectAttr({fromNode}, {toNode},\t f=True) # {queryConnections[i+i]} -> {queryConnections[i+i+1]}'
-				if udList:
-					if queryConnections[i+i].split('.')[-1] in udList: # if this attribute is a dynamic attribute: append to addAttr list instead
-						addAttrList.append(writeConnectCommand)
-					else:
-						connectionList.append(writeConnectCommand)
+				testFromConnection = om2.MFnAttribute( om2.MSelectionList().add(queryConnections[i+i]).getPlug(0).attribute() ).dynamic
+				testToConnection = om2.MFnAttribute( om2.MSelectionList().add(queryConnections[i+i+1]).getPlug(0).attribute() ).dynamic
+				if testFromConnection or testToConnection: # if any attribute side of the connection is a dynamic attribute: append to addAttr list instead
+					addAttrList.append(writeConnectCommand)
+				else:
+					connectionList.append(writeConnectCommand)
 
 
 
