@@ -220,7 +220,7 @@ for node in checkList:
 		# ++++++++++++++++++++++++++++++++++++++++++++++++++++
 		if transformAndShape[0][0] not in nodeListStage2: # if this transform has NOT already been made
 			nodeListStage2.append(transformAndShape[0][0]) # first/original transform node
-			getParent = mc.listRelatives(transformAndShape[0][0])
+			getParent = mc.listRelatives(transformAndShape[0][0], p=True)
 			if getParent:
 				recheckTransformList.append([len(nodeListStage2)-1 , getParent[0]])
 				getParent = [f'{tfPlaceholderName}', f'parent of shape: {getParent[0]}']
