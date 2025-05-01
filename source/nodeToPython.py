@@ -239,10 +239,10 @@ for node in checkList:
 				nodeListStage2.append(transformAndShape[1]) # shape node
 				shapeNodeListIndex = len(nodeListStage2)-1
 				# compose shape node
-				shapeCommand = []
-				shapeCommand.append(f'nodeList[{shapeNodeListIndex}] = mc.createNode("{thisShapeType}",\tn=f"{transformAndShape[1]}", p=nodeList[{len(nodeListStage2)-2}], skipSelect = True) # transform: {transformAndShape[0][0]}')
+				shapeCommand = [] # name changed to follow transform name, very little reason to give it a name completely unique from transform
+				shapeCommand.append(f'nodeList[{shapeNodeListIndex}] = mc.createNode("{thisShapeType}",\tn=f"{'{'}nodeList[{len(nodeListStage2)-2}]{'}'}Shape", p=nodeList[{len(nodeListStage2)-2}], skipSelect = True) # transform: {transformAndShape[0][0]}')
 				#                     nodeList[n]                    = mc.createNode("nurbsCurve"     ,\tn=f"shapeName"             , P="transformName",                   skipSelect = True)
-				skipList.append(transformAndShape[1])
+				skipList.append(transformAndShape[1]) # add INPUT SHAPE NODE NAME to skiplist, to check for re-encounters IN CURRENT SCENE
 				if thisShapeType in ["nurbsCurve", "bezierCurve"]:
 					# ----------------------------------------------------------------------------------------------
 					# time for om2.MPlug.getSetAttrCmds()
