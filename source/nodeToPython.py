@@ -721,9 +721,9 @@ both methods aim to solve the problem of needing an up vector along a spline (a 
 """
 
 """
-==========================================================
-STAGE 2: attributes and connections and secondary commands
-==========================================================
+==========================================
+STAGE 2: attributes and secondary commands
+==========================================
 """
 
 nodeListPrintIndex = -1 # lazy indexing
@@ -1165,15 +1165,20 @@ for node in nodeListStage2:
 					pass
 
 		addAttrList.append(printAddAttrs)
-
-
 		pass
 
-	"""
-	/////////////////////////////////////////
-	mc.connectAttr("  connection operator  ")
-	/////////////////////////////////////////
-	"""
+
+"""
+=====================================
+STAGE 3: connections of nodes in list
+=====================================
+"""
+
+nodeListPrintIndex = -1 # lazy indexing
+for node in nodeListStage2:
+	nodeListPrintIndex += 1 # index in nodeList output
+
+	thisNodeType = mc.nodeType(node)
 
 	# types of nodes to skip:
 	if thisNodeType in nodeTypeUseCommandsConstraint:
@@ -1183,6 +1188,11 @@ for node in nodeListStage2:
 		# other types of nodes to skip, see declaration above
 		continue
 	
+	"""
+	/////////////////////////////////////////
+	mc.connectAttr("  connection operator  ")
+	/////////////////////////////////////////
+	"""
 	# query outgoing connections
 	queryConnections = mc.listConnections(node, s=False, c=True,  d=True, p=True )  # -> list : ["shortName_from.attr", "shortName_to.attr", ... , ... ]
 		# downstream command
@@ -1220,7 +1230,28 @@ for node in nodeListStage2:
 				testFromConnection = om2.MFnAttribute( om2.MSelectionList().add(queryConnections[i+i]).getPlug(0).attribute() ).dynamic
 				testToConnection = om2.MFnAttribute( om2.MSelectionList().add(queryConnections[i+i+1]).getPlug(0).attribute() ).dynamic
 				if testFromConnection or testToConnection: # if any attribute side of the connection is a dynamic attribute: append to addAttr list instead
-					addAttrList.append(writeConnectCommand)
+					addAttrIndexFrom = None
+					if testFromConnection:
+						for i in range(len(addAttrList)): # get addAttrList index
+							if f"mc.addAttr(nodeList[{thisNodeIndex}]" in addAttrList[i]:
+								addAttrIndexFrom = i
+								break
+					addAttrIndexTo = None
+					if testToConnection:
+						for i in range(len(addAttrList)): # get addAttrList index
+							if f"mc.addAttr(nodeList[{holdIndex}]" in addAttrList[i]:
+								addAttrIndexTo = i
+								break
+					if testFromConnection and testToConnection: # if BOTH are dynamic attributes of different nodes: check for order and append to addAttrList index
+						if thisNodeIndex > holdIndex: # append to bigger/later: from
+							addAttrList[addAttrIndexFrom] += f"\n{writeConnectCommand}"
+						else: #append to bigger/later or equal (if equal that means it's the selfsame node): to
+							addAttrList[addAttrIndexTo] += f"\n{writeConnectCommand}"
+					else: # else just append to the one that has the index
+						if testFromConnection:
+							addAttrList[addAttrIndexFrom] += f"\n{writeConnectCommand}"
+						else:
+							addAttrList[addAttrIndexTo] += f"\n{writeConnectCommand}"
 				else:
 					connectionList.append(writeConnectCommand)
 
