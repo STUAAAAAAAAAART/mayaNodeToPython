@@ -893,7 +893,7 @@ for node in nodeListStage2:
 				getParent = f"'{getParent}'" # 'parentNode'
 			# compose parenting command
 			#                   mc.parent(            "child"              ,  "parent"      )
-			parentList.append(f"mc.parent(nodeList[{nodeListPrintIndex}], {getParent} ) # child: {node} -> parent: {printParent} " )
+			parentList.append(f"mc.parent(nodeList[{nodeListPrintIndex}], {getParent}, r=True ) # child: {node} -> parent: {printParent} " )
 			#                   mc.parent(            "child"              , f'nodeList[n]' )
 
 	"""
@@ -1292,7 +1292,7 @@ for printOut in commandList:
 for printOut in constraintList:
 	fileEnumerator.append(f"{printOut}\n")
 
-fileEnumerator.append("\n# reparent new DAG nodes\n# !!! DOUBLE-CHECK AND EDIT BEFORE RUNNING SCRIPT !!!\n")
+fileEnumerator.append("\n# reparent new DAG nodes; use r=True to move to parent (clears transform)\n# !!! DOUBLE-CHECK AND EDIT BEFORE RUNNING SCRIPT !!!\n")
 for printOut in parentList:
 	fileEnumerator.append(f"{printOut}\n")
 
