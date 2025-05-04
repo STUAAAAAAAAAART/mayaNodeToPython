@@ -25,11 +25,15 @@ nodeList.append( mc.createNode("multMatrix", n="multMatrix4", skipSelect = True)
 ```
 > the aim of the output is to be human-editable, so having each item in the nodeList be directly assigned an index means that i could edit, reorder, or delete values in an index, and the rest of the list are still maintained. this is important for further commands below using items in the `nodeList` for inputs
 
+## why not make it write a script to use a loop to handle all the mc.createNode() commands?
+
+> again, i'm wanting the flexibiity to reorder the operations while editing the output to containerise a rigging operation. it's a lot easier this way to ensure something gets made and set up absolutely before the rest or a particular node, and also a tangible way to merge two node operations into one (e.g. merging the creation of two network nodes holding two separate attributes into one after the output)
+
 ## why the use of openMaya for selection instead of mc.ls(sl=True)?
 
 > openMaya's `MSelectionList` returns a pointer to the DG/DAG object, which allows me to rename a node without having to worry about reflecting the name change elsewhere in the other variables or lists
 >
-> it's less relevant here because of the runtime-only nature of the script (i.e. states aren't important or remembered between runs), but it's more of a force of habit i'd like to keep as much as i can
+> it's less relevant here in the main script stage, because of the runtime-only nature of the script (i.e. states aren't important or remembered between runs), but it's more of a force of habit i'd like to keep as much as i can
 
 ## why not use openMaya to create nodes?
 
@@ -80,6 +84,8 @@ mc.curve(curveTransformShape[0], replace=True, ep=jointAsEPs, d=3)
 > i'm looking to run this either in the script editor or as a shelf command, and i want to minimise having to deal with relative script imports (either in maya's project environment or the default environment)
 >
 > it's an extremely long read, but it's the only simplest way i can think of that would be a copy-paste-and-run solution
+>
+> also it's easier to troubleshoot with the variables not declared in a function, as i can just recall a variable to show what's being held at point of the script halting in an error.
 
 ## you know pass does nothing, right?
 

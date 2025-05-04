@@ -1099,17 +1099,29 @@ for node in nodeListStage2:
 					# soft range (slider limits)
 					if mc.attributeQuery(attr, n=node, softMinExists = True):
 						udFlags +=  ", hasSoftMinValue = True"
-						udFlags += f", softMinValue = {mc.attributeQuery(attr, n=node, softMin = True)}"
+						udVal = mc.attributeQuery(attr, n=node, softMin = True)
+						if len(udVal) == 1:
+							udVal = udVal[0]
+						udFlags += f", softMinValue = {udVal}"
 					if mc.attributeQuery(attr, n=node, softMaxExists = True):
 						udFlags +=  ", hasSoftMaxValue = True"
-						udFlags += f", softMaxValue = {mc.attributeQuery(attr, n=node, softMax = True)}"
+						udVal = mc.attributeQuery(attr, n=node, softMax = True)
+						if len(udVal) == 1:
+							udVal = udVal[0]
+						udFlags += f", softMaxValue = {udVal}"
 					# hard range (hard limits)
 					if mc.attributeQuery(attr, n=node, minExists = True):
 						udFlags +=  ", hasMinValue = True"
-						udFlags += f", minValue = {mc.attributeQuery(attr, n=node, min = True)}"
+						udVal = mc.attributeQuery(attr, n=node, min = True)
+						if len(udVal) == 1:
+							udVal = udVal[0]
+						udFlags += f", minValue = {udVal}"
 					if mc.attributeQuery(attr, n=node, maxExists = True):
 						udFlags +=  ", hasMaxValue = True"
-						udFlags += f", maxValue = {mc.attributeQuery(attr, n=node, max = True)}"
+						udVal = mc.attributeQuery(attr, n=node, max = True)
+						if len(udVal) == 1:
+							udVal = udVal[0]
+						udFlags += f", maxValue = {udVal}"
 					# default value
 					udFlags += f", defaultValue = {mc.attributeQuery(attr, n=node, listDefault = True)[0]}"
 
