@@ -706,6 +706,10 @@ checkSplineAdvancedIK = [ # splineIK attributes for advanced twist controls
 	('d',)
 ]
 
+# transform node: check if these attributes are locked
+lockList = ["translateX","translateY","translateZ","rotateX","rotateY","rotateZ","scaleX","scaleY","scaleZ"]
+
+
 """
 the ikSplineSolver in the ikHandle has an advanced twist mode (and corresponding sets of control attributes)
 	these serve to aim the ends of the spline joint chain to two corresponding targets (somewhat like a pole vector)
@@ -1044,6 +1048,15 @@ for node in nodeListStage2:
 					setAttrList.append(f"mc.setAttr(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}.{attr}', {attrFlatString}, type='{getAttrType}') # {node}.{attr}")
 					#                               f'  {  nodeList[             {n}            ]  }  .  attribute '
 					#                    mc.setAttr(                       f'{nodelist[n]}.attribute'         ,  1, 2, 3, 4, 5,   type='dataType'     )
+	# tranform nodes: check lock status
+	if thisNodeType == "transform":
+		for attr in lockList:
+			if mc.getAttr(F"{node}.{attr}", lock=True):
+				# flags separated, maya history queue does not like having this in one go
+				setAttrList.append(f"mc.setAttr(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}.{attr}', lock=True")
+				setAttrList.append(f"mc.setAttr(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}.{attr}', keyable=False, channelBox=False")
+				#                    mc.setAttr(f'  {nodelist[n]}  .attribute' , lock=True)
+				
 	pass
 
 	"""

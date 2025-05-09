@@ -29,6 +29,18 @@ nodeList.append( mc.createNode("multMatrix", n="multMatrix4", skipSelect = True)
 
 > again, i'm wanting the flexibiity to reorder the operations while editing the output to containerise a rigging operation. it's a lot easier this way to ensure something gets made and set up absolutely before the rest or a particular node, and also a tangible way to merge two node operations into one (e.g. merging the creation of two network nodes holding two separate attributes into one after the output)
 
+## why not use match-case for most of the script?
+- https://peps.python.org/pep-0636/
+- https://www.youtube.com/watch?v=XpxTrDDcpPE
+
+> i'm basing off maya 2022, which runs an integrated python 3.7.7 interpreter.
+> 
+> match-case would be a godsend, unfortunately for me it's only introduced in python 3.10, a supersceeding factor in the 2023 VFX platform, and only implemented in maya 2024
+
+- https://vfxplatform.com/platform_history.html
+- https://help.autodesk.com/view/MAYAUL/2023/ENU/?guid=Maya_SDK_Open_Source_Components_Open_Source_Components_2023_3_html
+- https://help.autodesk.com/view/MAYAUL/2024/ENU/?guid=Maya_SDK_Open_Source_Components_2024_Open_Source_Components_html
+
 ## why the use of openMaya for selection instead of mc.ls(sl=True)?
 
 > openMaya's `MSelectionList` returns a pointer to the DG/DAG object, which allows me to rename a node without having to worry about reflecting the name change elsewhere in the other variables or lists
