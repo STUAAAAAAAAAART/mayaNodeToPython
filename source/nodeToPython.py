@@ -1053,8 +1053,8 @@ for node in nodeListStage2:
 		for attr in lockList:
 			if mc.getAttr(F"{node}.{attr}", lock=True):
 				# flags separated, maya history queue does not like having this in one go
-				setAttrList.append(f"mc.setAttr(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}.{attr}', lock=True)")
-				setAttrList.append(f"mc.setAttr(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}.{attr}', keyable=False, channelBox=False)")
+				setAttrList.append(f"mc.setAttr(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}.{attr}', lock=True) # {node}.{attr}")
+				setAttrList.append(f"mc.setAttr(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}.{attr}', keyable=False, channelBox=False) # {node}.{attr}")
 				#                    mc.setAttr(f'  {nodelist[n]}  .attribute' , lock=True)
 				
 	pass
