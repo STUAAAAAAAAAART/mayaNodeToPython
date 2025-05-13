@@ -620,10 +620,10 @@ nodeCheckDict = {
 	('minScaleLimitEnable', 'minScaleXLimitEnable', 'minScaleYLimitEnable', 'minScaleZLimitEnable'),
 	('minTransLimit', 'minTransXLimit', 'minTransYLimit', 'minTransZLimit'),
 	('minTransLimitEnable', 'minTransXLimitEnable', 'minTransYLimitEnable', 'minTransZLimitEnable'),
-	('useObjectColor',),
-	('objectColor',),
-	('objectColorRGB', 'objectColorR', 'objectColorG', 'objectColorB'),
-	('wireColorRGB',), # maya does not update the scene when the colour is being set/connected through the attribute and not a command call...
+	('useObjectColor',), # maya does not update the scene when the colour is being set/connected through the attribute and not a command call...
+	#('objectColor',),
+	#('objectColorRGB', 'objectColorR', 'objectColorG', 'objectColorB'),
+	#('wireColorRGB',),
 	# ('wireColorRGB', 'wireColorR', 'wireColorG', 'wireColorB'),
 	('useOutlinerColor',),
 	('outlinerColor', 'outlinerColorR', 'outlinerColorG', 'outlinerColorB')
@@ -971,6 +971,19 @@ for node in nodeListStage2:
 		makeSetAttrSublist = []
 		removeMainSetAttr = False
 		for attrSet in checkAttrList:
+			if attrSet[0] == "useObjectColor": # hard override to handle wireframe colour, mc.color must be used
+				wireIsColoured = mc.getAttr(f"{node}.{attrSet[0]}")
+				if wireIsColoured == 0:
+					# default enum value changes nothing
+					continue
+				elif wireIsColoured == 1: # colour index
+					setAttrList.append(f"mc.color(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}', userDefined={mc.getAttr(f"{node}.objectColor")}) # {node} - wireframe colour")
+					#                    mc.color(       nodelist[n]                                 , userDefined=7                                  )
+				elif wireIsColoured == 2: # RGB value
+					setAttrList.append(f"mc.color(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}', rgb={mc.getAttr(f"{node}.wireColor")[0]}) # {node} - wireframe colour")
+					#                    mc.color(       nodelist[n]                                 , rgb=(r,g,b)                            )
+				continue # done - outliner colour should be handled by default case that follows:
+
 			if attrSet[0] in getNodeIncomingConnections: # if main attr has incoming connections
 				# main attribute is connected upstream, skip
 				continue
@@ -1040,14 +1053,9 @@ for node in nodeListStage2:
 						attrFlatString = attrFlatString[1:-1]
 					# "1.0, 0.0, 0.0"
 				# start composing command	
-				if attrSet[0] == "wireColorRGB": # wireframe command override
-					setAttrList.append(f"mc.color(nodeList[{nodeListStage2.index(node)}], rgb=({attrFlatString}) ) # {node}")
-					#                    mc.color(               nodeList[n]            , rgb=(      1,0,0    ) )
-					# CAUTION: instances of transfrom objects will share the same wireframe colour in the scene
-				else:
-					setAttrList.append(f"mc.setAttr(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}.{attr}', {attrFlatString}, type='{getAttrType}') # {node}.{attr}")
-					#                               f'  {  nodeList[             {n}            ]  }  .  attribute '
-					#                    mc.setAttr(                       f'{nodelist[n]}.attribute'         ,  1, 2, 3, 4, 5,   type='dataType'     )
+				setAttrList.append(f"mc.setAttr(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}.{attr}', {attrFlatString}, type='{getAttrType}') # {node}.{attr}")
+				#                               f'  {  nodeList[             {n}            ]  }  .  attribute '
+				#                    mc.setAttr(                       f'{nodelist[n]}.attribute'         ,  1, 2, 3, 4, 5,   type='dataType'     )
 	# tranform nodes: check lock status
 	if thisNodeType == "transform":
 		for attr in lockList:
