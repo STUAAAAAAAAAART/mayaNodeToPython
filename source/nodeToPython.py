@@ -1038,8 +1038,8 @@ for node in nodeListStage2:
 				getAttrType = ""
 				try:
 					getAttrType = mc.getAttr(f'{node}.{attr}', type=True)
-				except: # workarounds for long attributes
-					if thisNodeType == "plusMinusAverage":
+				except: # got weird multi-attribute: workarounds for long attributes
+					if thisNodeType == "plusMinusAverage": # just to be sure
 						# 'input2D[n]' -> ['input2D', 'n]'] -> 'input2D'
 						getAttrType = mc.getAttr(f'{node}.{attr.split("[")[0]}', type=True)
 				getAttrValues = mc.getAttr(f'{node}.{attr}')
@@ -1053,7 +1053,10 @@ for node in nodeListStage2:
 						attrFlatString = attrFlatString[1:-1]
 					# "1.0, 0.0, 0.0"
 				# start composing command	
-				setAttrList.append(f"mc.setAttr(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}.{attr}', {attrFlatString}, type='{getAttrType}') # {node}.{attr}")
+				typeFlagString = ""
+				if getAttrType == "bool":
+					typeFlagString = f", type='{getAttrType}'"
+				setAttrList.append(f"mc.setAttr(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}.{attr}', {attrFlatString} {typeFlagString}) # {node}.{attr}")
 				#                               f'  {  nodeList[             {n}            ]  }  .  attribute '
 				#                    mc.setAttr(                       f'{nodelist[n]}.attribute'         ,  1, 2, 3, 4, 5,   type='dataType'     )
 	# tranform nodes: check lock status
