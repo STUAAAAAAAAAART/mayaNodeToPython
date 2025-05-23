@@ -1054,7 +1054,7 @@ for node in nodeListStage2:
 					# "1.0, 0.0, 0.0"
 				# start composing command	
 				typeFlagString = ""
-				if getAttrType == "bool":
+				if getAttrType != "bool":
 					typeFlagString = f", type='{getAttrType}'"
 				setAttrList.append(f"mc.setAttr(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}.{attr}', {attrFlatString} {typeFlagString}) # {node}.{attr}")
 				#                               f'  {  nodeList[             {n}            ]  }  .  attribute '
