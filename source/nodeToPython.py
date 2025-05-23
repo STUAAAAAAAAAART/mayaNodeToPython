@@ -683,6 +683,11 @@ nodeCheckDict = {
 	('secondaryTargetVector', 'secondaryTargetVectorX', 'secondaryTargetVectorY', 'secondaryTargetVectorZ') # if set to Align
 ],
 
+'curveFromSurfaceIso' : [ # aimMatrix node
+	('isoparmValue',),
+	('isoparmDirection',),
+],
+
 }
 
 
