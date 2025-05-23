@@ -675,12 +675,12 @@ nodeCheckDict = {
 ],
 
 'aimMatrix' : [ # aimMatrix node
-	('primaryInputAxis', 'primaryInputAxisX', 'primaryInputAxisY', 'primaryInputAxisZ'), 
 	('primaryMode',),
-	('primaryTargetVector', 'primaryTargetVectorX', 'primaryTargetVectorY', 'primaryTargetVectorZ'),
-	('secondaryInputAxis', 'secondaryInputAxisX', 'secondaryInputAxisY', 'secondaryInputAxisZ'),
+	('primaryInputAxis', 'primaryInputAxisX', 'primaryInputAxisY', 'primaryInputAxisZ'), # Forward Vector
+	('primaryTargetVector', 'primaryTargetVectorX', 'primaryTargetVectorY', 'primaryTargetVectorZ'), # if set to Align
 	('secondaryMode',),
-	('secondaryTargetVector', 'secondaryTargetVectorX', 'secondaryTargetVectorY', 'secondaryTargetVectorZ')
+	('secondaryInputAxis', 'secondaryInputAxisX', 'secondaryInputAxisY', 'secondaryInputAxisZ'), # Upward Vector
+	('secondaryTargetVector', 'secondaryTargetVectorX', 'secondaryTargetVectorY', 'secondaryTargetVectorZ') # if set to Align
 ],
 
 }
@@ -977,10 +977,10 @@ for node in nodeListStage2:
 					# default enum value changes nothing
 					continue
 				elif wireIsColoured == 1: # colour index
-					setAttrList.append(f"mc.color(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}', userDefined={mc.getAttr(f"{node}.objectColor")}) # {node} - wireframe colour")
+					setAttrList.append(f"mc.color(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}', userDefined={mc.getAttr(f'{node}.objectColor')}) # {node} - wireframe colour")
 					#                    mc.color(       nodelist[n]                                 , userDefined=7                                  )
 				elif wireIsColoured == 2: # RGB value
-					setAttrList.append(f"mc.color(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}', rgb={mc.getAttr(f"{node}.wireColor")[0]}) # {node} - wireframe colour")
+					setAttrList.append(f"mc.color(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}', rgb={mc.getAttr(f'{node}.wireColor')[0]}) # {node} - wireframe colour")
 					#                    mc.color(       nodelist[n]                                 , rgb=(r,g,b)                            )
 				continue # done - outliner colour should be handled by default case that follows:
 
