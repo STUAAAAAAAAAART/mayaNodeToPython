@@ -674,7 +674,7 @@ nodeCheckDict = {
 	('useShear',)
 ],
 
-'aimMatrix' : [ # aimMatrix node
+'aimMatrix' : [ # aimMatrix
 	('primaryMode',),
 	('primaryInputAxis', 'primaryInputAxisX', 'primaryInputAxisY', 'primaryInputAxisZ'), # Forward Vector
 	('primaryTargetVector', 'primaryTargetVectorX', 'primaryTargetVectorY', 'primaryTargetVectorZ'), # if set to Align
@@ -683,9 +683,9 @@ nodeCheckDict = {
 	('secondaryTargetVector', 'secondaryTargetVectorX', 'secondaryTargetVectorY', 'secondaryTargetVectorZ') # if set to Align
 ],
 
-'curveFromSurfaceIso' : [ # aimMatrix node
+'curveFromSurfaceIso' : [ # curveFromSurfaceIso
 	('isoparmValue',),
-	('isoparmDirection',),
+	('isoparmDirection',), # U or V direction
 ],
 
 }
