@@ -985,7 +985,7 @@ for node in nodeListStage2:
 					setAttrList.append(f"mc.color(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}', userDefined={mc.getAttr(f'{node}.objectColor')}) # {node} - wireframe colour")
 					#                    mc.color(       nodelist[n]                                 , userDefined=7                                  )
 				elif wireIsColoured == 2: # RGB value
-					setAttrList.append(f"mc.color(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}', rgb={mc.getAttr(f'{node}.wireColor')[0]}) # {node} - wireframe colour")
+					setAttrList.append(f"mc.color(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}', rgb={mc.getAttr(f'{node}.wireColorRGB')[0]}) # {node} - wireframe colour")
 					#                    mc.color(       nodelist[n]                                 , rgb=(r,g,b)                            )
 				continue # done - outliner colour should be handled by default case that follows:
 
