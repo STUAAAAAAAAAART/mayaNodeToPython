@@ -929,7 +929,7 @@ for node in nodeListStage2:
 				del getNodeIncomingConnections[i+1]
 			# trim strings to just the attribute that has an incoming connection
 			for i in range(len(getNodeIncomingConnections)):
-				getNodeIncomingConnections[i] = getNodeIncomingConnections[i].split('.')[-1]
+				getNodeIncomingConnections[i] = getNodeIncomingConnections[i].split('.', 1)[-1] # split the first dot only, for plusMinusAverage node ( plusMinusAverage.input2D[n].inputX )
 			# [attr, attr, attr, ...]
 		else: # listConnections returned None
 			getNodeIncomingConnections = [] # just to make the following work
@@ -942,9 +942,9 @@ for node in nodeListStage2:
 
 		# add checks for each plusMinusAverage value
 		if thisNodeType == "plusMinusAverage":
-			pmaList1D = mc.listAttr(node+".input1D", m=True)
-			pmaList2D = mc.listAttr(node+".input2D", m=True)
-			pmaList3D = mc.listAttr(node+".input3D", m=True)
+			pmaList1D = mc.listAttr(node+".input1D", m=True) # 'input1D[0]'
+			pmaList2D = mc.listAttr(node+".input2D", m=True) # 'input2D[0]', 'input2D[0].input2Dx', 'input2D[0].input2Dy'
+			pmaList3D = mc.listAttr(node+".input3D", m=True) # 'input3D[0]', 'input3D[0].input3Dx', 'input3D[0].input3Dy', 'input3D[0].input3Dz'
 			
 			if pmaList1D: # if not None
 				for attr in pmaList1D:
@@ -954,7 +954,7 @@ for node in nodeListStage2:
 				for i in range(len2D):
 					checkAttrList.append((pmaList2D[i*3],pmaList2D[i*3+1],pmaList2D[i*3+2]))
 			if pmaList3D: # if not None
-				len3D = int(len(pmaList3D) *0.25)
+				len3D = int(len(pmaList3D) * 0.25)
 				for i in range(len3D):
 					checkAttrList.append((pmaList3D[i*4],pmaList3D[i*4+1],pmaList3D[i*4+2],pmaList3D[i*4+3]))
 			pass
@@ -992,6 +992,14 @@ for node in nodeListStage2:
 			if attrSet[0] in getNodeIncomingConnections: # if main attr has incoming connections
 				# main attribute is connected upstream, skip
 				continue
+			elif len(attrSet) == 1: # attribute has no subattributes
+				pass # do not skip, let script check for default value
+			else: # check if all subattributes are connected
+				allSubAttrConnected = True
+				for attr in attrSet[1:]:
+					allSubAttrConnected = allSubAttrConnected and (attr in getNodeIncomingConnections)
+				if allSubAttrConnected:
+					continue
 			
 			writeAttrList = []
 			# check if main attr has any changes to its value
@@ -1046,7 +1054,9 @@ for node in nodeListStage2:
 				except: # got weird multi-attribute: workarounds for long attributes
 					if thisNodeType == "plusMinusAverage": # just to be sure
 						# 'input2D[n]' -> ['input2D', 'n]'] -> 'input2D'
-						getAttrType = mc.getAttr(f'{node}.{attr.split("[")[0]}', type=True)
+						pmaAttr = attr.split("[")[0]
+						pmaAttr = attr.split(".")[-1]
+						getAttrType = mc.getAttr(f'{node}.{pmaAttr}', type=True)
 				getAttrValues = mc.getAttr(f'{node}.{attr}')
 				attrFlatString = f"{getAttrValues}"
 				if type(getAttrValues) == type(list()):
