@@ -125,6 +125,8 @@ creation commands composed here and not in a separate initial loop
 """
 
 
+shapeNodeTypes = ["nurbsCurve", "bezierCurve", "nurbsSurface", "mesh", "locator"]
+
 recheckTransformList=[]
 # [[nodeListIndex, parentName], ...]
 tfPlaceholderName = "xxxxxxxxxxxxx"
@@ -152,7 +154,8 @@ for node in checkList:
 	#/////////////////////////////////////////////////////
 	# curve objects, transform node and curve/bezier shapes
 	#/////////////////////////////////////////////////////
-	if thisNodeType in ["nurbsCurve", "bezierCurve"] or thisNodeType == "transform": # nurbsCurve and general transforms
+	isShapeNode = thisNodeType in shapeNodeTypes
+	if isShapeNode or thisNodeType == "transform": # nurbsCurve and general transforms
 		"""
 		CAUTION0: now dealing with DAG paths with relative names and parenting hierachy
 		CAUTION1: now dealing with object instancing, which means many transform nodes can share a single shape node
@@ -184,7 +187,7 @@ for node in checkList:
 				# end up with [[node], None]
 
 		# if node is curve shapes: current state if not transform: [[], None]
-		if thisNodeType in ["nurbsCurve", "bezierCurve"]:
+		if isShapeNode:
 			thisShapeType = thisNodeType
 			transformAndShape[1] = node
 			# end up with [[], shape]
