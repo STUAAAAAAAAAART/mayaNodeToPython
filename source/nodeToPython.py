@@ -78,14 +78,10 @@ nodeTypeUseCommandsConstraint = [ # list
 	'poleVectorConstraint'
 ]
 
-nodeTypeUseCommandsIK = [ # list
-	# ikHandle from IK solvers
-		# complex, depending on type of solver
-	'ikHandle'
-]
 
-nodeTypeSkip = [ # list
-	'ikEffector' # node created with IK nodes, rarely does the need to adjust them arise
+nodeTypeSkipConnections = [ # list
+	'ikEffector', # node created with IK nodes, rarely does the need to adjust them arise
+	'ikHandle', # node created with ikHandle command, rarely does the need to adjust them arise
 ]
 
 nodeTypeFilterOut = [ # list
@@ -127,9 +123,13 @@ creation commands composed here and not in a separate initial loop
 
 shapeNodeTypes = ["nurbsCurve", "bezierCurve", "nurbsSurface", "mesh", "locator"]
 
-recheckTransformList=[]
+recheckTransformList = []
 # [[nodeListIndex, parentName], ...]
-tfPlaceholderName = "xxxxxxxxxxxxx"
+tfPlaceholderName = "&xxxxxxxxxxxxx"
+nodeFindReplaceList = []
+# [[listPointer, nodeListIndex, nodeName], ...] ; e.g.:
+# [ commandList, index, "thisNodeName" ]
+nodePlaceholderName = "&mmmmmmmmmmmmm"
 
 for node in checkList:
 	if node in skipList:
@@ -419,7 +419,7 @@ for node in checkList:
 
 		startEndJoints[0] = mc.ikHandle(handleSolverEffector[0], query = True, sj=True)
 		startEndJoints[1] = mc.listConnections(handleSolverEffector[2]+'.offsetParentMatrix', source = True , destination = False)[0]
-
+		
 		#/////////////////////////////////
 		# joint selection
 		# quick check if already processed 
@@ -449,97 +449,130 @@ for node in checkList:
 
 		stringIfSplineIK = ""
 		transformAndShape = [None, None] # for curve, if this IK system is splineIK
+		holdCurveNode = ""
+		notACurve = False
+		splineTempCommand = ["",""]
 		#//////////////////////////////////////
 		# mc.ikHandle(    splineIK handler    )
 		#//////////////////////////////////////
 		if handleSolverEffector[1] == 'ikSplineSolver': # this is splineIK
 			# get curve object: transform and shape
 			transformAndShape[0] = mc.listConnections(handleSolverEffector[0]+'.inCurve', source = True , destination = False)[0]
-			transformAndShape[1] = mc.listConnections(handleSolverEffector[0]+'.inCurve', source = True , destination = False, shapes=True)[0]
+			# test for input curve source. if it's not a curve shape: create temporary curve 
+			if mc.nodeType(transformAndShape[0]) == "transform":
+				transformAndShape[1] = mc.listConnections(handleSolverEffector[0]+'.inCurve', source = True , destination = False, shapes=True)[0]
+			else:
+				notACurve = True
+				holdCurveNode = mc.listConnections(handleSolverEffector[0]+'.inCurve', source = True , destination = False, plugs=True)[0]
+				#transformAndShape[0] = None
 
-			#/////////////////////////////////////////////////
-			# joints: get joint chain and worldspace positions
-			#/////////////////////////////////////////////////
-			# get selection chain between start and end joints
-			startEndJointPaths = [None, None]
-			startEndJointPaths[0] = mc.ls(startEndJoints[0], long=True)[0]
-				# mc.ls() -> ['|joint4']
-				# -[0]-> '|joint4'
-			startEndJointPaths[1] = mc.ls(startEndJoints[1], long=True)[0]
-				# mc.ls() -> ['|joint4|joint5|joint6|joint7|joint8']
-				# -[0]-> '|joint4|joint5|joint6|joint7|joint8'
-			startEndJointPaths[1] = startEndJointPaths[1].replace(startEndJointPaths[0], '', 1)
-				# [0] '|joint4' ; [1] '|joint5|joint6|joint7|joint8'
-			startEndJointPaths[1] = startEndJointPaths[1].split('|')[1:]
-				# ['', 'joint5', 'joint6', 'joint7', 'joint8'][1:]
-			
-			jointAsEPs = []
-			# add EPs in reverse order (it's easier to trim from the back)
-			for i in range(len(startEndJointPaths[1])): 
-				thisJoint = f'{startEndJointPaths[0]}|'
-				for j in startEndJointPaths[1][:(len(startEndJointPaths[1])-i)]:
-					thisJoint += f'|{j}'
-				jointAsEPs.insert(0, mc.xform(thisJoint, q=True, ws=True, t=True))
-			# add EP for the start joint
-			jointAsEPs.insert(0, mc.xform(startEndJointPaths[0], q=True, ws=True, t=True))
-			
-			# multiply EPs by worldInverse of curve transform
-			matA = mc.getAttr(transformAndShape[1]+".worldInverseMatrix")
-			transformedEP = []
-			for ep in jointAsEPs:
-				matB = list(ep)
-				matB.append(1.0)
-				matMult = []
-				matMult.append( matA[ 0]*matB[0] + matA[ 4]*matB[1] + matA[ 8]*matB[2] + matA[12]*matB[3] )
-				matMult.append( matA[ 1]*matB[0] + matA[ 5]*matB[1] + matA[ 9]*matB[2] + matA[13]*matB[3] )
-				matMult.append( matA[ 2]*matB[0] + matA[ 6]*matB[1] + matA[10]*matB[2] + matA[14]*matB[3] )
-				matMult.append( matA[ 3]         + matA[ 7]         + matA[11]         + matA[15]         )
-				
-				# normalise components relative to W and remove W
-				for i in range(len(matMult)-1):
-					matMult[i] = matMult[i] / matMult[-1]
-				
-				transformedEP.append( tuple(matMult[:-1].copy()) )
-				
-			#//////////////////////////////////
-			# ikHandle : curve handler override
-			#//////////////////////////////////
-			getCurveTransFormShapeIndex = [None,None]
-			# if curve shape already exist (implies transform node also exists)
-			if transformAndShape[0] in nodeListStage2:
-				# get nodeList index of curveShape and carry on to ikHandle command composer
-				getCurveTransFormShapeIndex[0] = nodeListStage2.index(transformAndShape[0]) # transform for ikHandle
-				getCurveTransFormShapeIndex[1] = nodeListStage2.index(transformAndShape[1]) # shape for rebuilding
-				
-				# override detected curve shape with placeholder
-				makeNode = nodeList[getCurveTransFormShapeIndex[1]].split('\n') # see curve handler
-				makeNode[1] = f"mc.setAttr(nodeList[{getCurveTransFormShapeIndex[1]}]+'.cc', {nurbsCurveDefaultStringCC}) # splineIK placeholder"
-				nodeList[getCurveTransFormShapeIndex[1]] = f'{makeNode[0]}\n{makeNode[1]}'
+			if notACurve:
+				#/////////////////////////////////////////////////
+				# offroad case: driver is a curve function node
+				# ikHandle should be applied with defaults (curve automatically created) and caught ( ikHandle()[2] )
+				# connect the node attribute to ikHandle.inCurve, then mc.delete the automatic curve
+				#/////////////////////////////////////////////////
+				thisCurveNode=""
+				if transformAndShape[0] in nodeListStage2: # if driver node is in selection
+					# use nodeList index
+					thisCurveNode = f"{'{'}nodeList[{nodeListStage2.index(transformAndShape[0])}]{'}'}"
+				else:
+					# not in selection: add to find and replace
+					nodeFindReplaceList.append[commandList, len(commandList), transformAndShape[0]]
+					thisCurveNode = nodePlaceholderName
+				thisCurveNode += f".{holdCurveNode.split('.', 1)[1]}" # tack on the attribute
+				stringIfSplineIK = f", ccv=True"
 				pass
 			else:
-				# enumerate placeholder curve creation commands
-				nodeListStage2.append(transformAndShape[0]) # transform
-				getCurveTransFormShapeIndex[0] = len(nodeListStage2)-1
-				nodeList.append(f"nodeList[{getCurveTransFormShapeIndex[0]}] = mc.createNode('transform', n='{transformAndShape[0]}')")
+				#/////////////////////////////////////////////////
+				# normal case: driver is a curveShape node
+				# joints: get joint chain and worldspace positions
+				#/////////////////////////////////////////////////
+				# get selection chain between start and end joints
+				startEndJointPaths = [None, None]
+				startEndJointPaths[0] = mc.ls(startEndJoints[0], long=True)[0]
+					# mc.ls() -> ['|joint4']
+					# -[0]-> '|joint4'
+				startEndJointPaths[1] = mc.ls(startEndJoints[1], long=True)[0]
+					# mc.ls() -> ['|joint4|joint5|joint6|joint7|joint8']
+					# -[0]-> '|joint4|joint5|joint6|joint7|joint8'
+				startEndJointPaths[1] = startEndJointPaths[1].replace(startEndJointPaths[0], '', 1)
+					# [0] '|joint4' ; [1] '|joint5|joint6|joint7|joint8'
+				startEndJointPaths[1] = startEndJointPaths[1].split('|')[1:]
+					# ['', 'joint5', 'joint6', 'joint7', 'joint8'][1:]
 				
-				nodeListStage2.append(transformAndShape[1]) # curveShape
-				getCurveTransFormShapeIndex[1] = len(nodeListStage2)-1
-				makeNode = []
-				makeNode.append(f"nodeList[{getCurveTransFormShapeIndex[1]}] = mc.createNode('nurbsCurve', n='{transformAndShape[1]}', p=nodeList[{getCurveTransFormShapeIndex[0]}])")
-				makeNode.append(f"mc.setAttr(nodeList[{getCurveTransFormShapeIndex[1]}]+'.cc', {nurbsCurveDefaultStringCC}) # splineIK placeholder")
-				nodeList.append(f"{makeNode[0]}\n{makeNode[1]}")
+				jointAsEPs = []
+				# add EPs in reverse order (it's easier to trim from the back)
+				for i in range(len(startEndJointPaths[1])): 
+					thisJoint = f'{startEndJointPaths[0]}|'
+					for j in startEndJointPaths[1][:(len(startEndJointPaths[1])-i)]:
+						thisJoint += f'|{j}'
+					jointAsEPs.insert(0, mc.xform(thisJoint, q=True, ws=True, t=True))
+				# add EP for the start joint
+				jointAsEPs.insert(0, mc.xform(startEndJointPaths[0], q=True, ws=True, t=True))
+				
+				transformedEP = []
+				# multiply EPs by worldInverse of curve transform
+				matA = mc.getAttr(transformAndShape[1]+".worldInverseMatrix")
+				for ep in jointAsEPs:
+					matB = list(ep)
+					matB.append(1.0)
+					matMult = []
+					matMult.append( matA[ 0]*matB[0] + matA[ 4]*matB[1] + matA[ 8]*matB[2] + matA[12]*matB[3] )
+					matMult.append( matA[ 1]*matB[0] + matA[ 5]*matB[1] + matA[ 9]*matB[2] + matA[13]*matB[3] )
+					matMult.append( matA[ 2]*matB[0] + matA[ 6]*matB[1] + matA[10]*matB[2] + matA[14]*matB[3] )
+					matMult.append( matA[ 3]         + matA[ 7]         + matA[11]         + matA[15]         )
+					
+					# normalise components relative to W and remove W
+					for i in range(len(matMult)-1):
+						matMult[i] = matMult[i] / matMult[-1]
+					
+					transformedEP.append( tuple(matMult[:-1].copy()) )
+
+				#//////////////////////////////////
+				# ikHandle : curve handler override
+				#//////////////////////////////////
+				getCurveTransFormShapeIndex = [None,None]
+				# if curve shape already exist (implies transform node also exists)
+				if transformAndShape[0] in nodeListStage2:
+					# get nodeList index of curveShape and carry on to ikHandle command composer
+					getCurveTransFormShapeIndex[0] = nodeListStage2.index(transformAndShape[0]) # transform for ikHandle
+					getCurveTransFormShapeIndex[1] = nodeListStage2.index(transformAndShape[1]) # shape for rebuilding
+					
+					# override detected curve shape with placeholder
+					makeNode = nodeList[getCurveTransFormShapeIndex[1]].split('\n') # see curve handler
+					makeNode[1] = f"mc.setAttr(nodeList[{getCurveTransFormShapeIndex[1]}]+'.cc', {nurbsCurveDefaultStringCC}) # splineIK placeholder"
+					nodeList[getCurveTransFormShapeIndex[1]] = f'{makeNode[0]}\n{makeNode[1]}'
+					pass
+				else:
+					# enumerate placeholder curve creation commands
+					nodeListStage2.append(transformAndShape[0]) # transform
+					getCurveTransFormShapeIndex[0] = len(nodeListStage2)-1
+					nodeList.append(f"nodeList[{getCurveTransFormShapeIndex[0]}] = mc.createNode('transform', n='{transformAndShape[0]}')")
+					
+					nodeListStage2.append(transformAndShape[1]) # curveShape
+					getCurveTransFormShapeIndex[1] = len(nodeListStage2)-1
+					makeNode = []
+					makeNode.append(f"nodeList[{getCurveTransFormShapeIndex[1]}] = mc.createNode('nurbsCurve', n='{transformAndShape[1]}', p=nodeList[{getCurveTransFormShapeIndex[0]}])")
+					makeNode.append(f"mc.setAttr(nodeList[{getCurveTransFormShapeIndex[1]}]+'.cc', {nurbsCurveDefaultStringCC}) # splineIK placeholder")
+					nodeList.append(f"{makeNode[0]}\n{makeNode[1]}")
+					pass
+				stringIfSplineIK = f", ccv=False, curve=nodeList[{getCurveTransFormShapeIndex[0]}]"
+				
+				ikCommands.append(f"mc.curve(nodeList[{getCurveTransFormShapeIndex[1]}],ep={jointAsEPs}, r=True) # default, absolute to world")
+				ikCommands.append(f"# mc.curve(nodeList[{getCurveTransFormShapeIndex[1]}],ep={transformedEP}, r=True) # local to curve object transform at time of query")
 				pass
-			stringIfSplineIK = f", ccv=False, curve=nodeList[{getCurveTransFormShapeIndex[0]}]"
-			
-			ikCommands.append(f"mc.curve(nodeList[{getCurveTransFormShapeIndex[1]}],ep={jointAsEPs}, r=True) # default, absolute to world")
-			ikCommands.append(f"# mc.curve(nodeList[{getCurveTransFormShapeIndex[1]}],ep={transformedEP}, r=True) # local to curve object transform at time of query")
-			pass
-			# pass to ikHandle command composer
+				# pass to ikHandle command composer
 
 		#///////////////////////
 		# write ikHandle Command
 		#///////////////////////
+		# enumerate ikHandle and effector nodes
 		indexHandleEffector = [None,None]
+
+		ikHandleCommandHeader = f",stuTempEffector"
+		# [ikHandle, ikEffector]
+
 		nodeListStage2.append(handleSolverEffector[0]) # ikHandle
 		indexHandleEffector[0] = len(nodeListStage2)-1
 		nodeList.append(f"nodeList[{indexHandleEffector[0]}] = '{handleSolverEffector[0]}' # ikhandle, {handleSolverEffector[1]}")
@@ -550,21 +583,39 @@ for node in checkList:
 		# ---------------------------
 		# the stuTempEffector thing: just a temporary holdover to catch the effector node and rename it to its original or indended name
 		# assigning it back to the nodeList item in case of name collisions (mc.rename() will give an alternative name as fallback)
-		makeCommandIKH = f"nodeList[{indexHandleEffector[0]}], stuTempEffector = "
-		#                  nodeList[A]                       , nodelist[B] = 
+		makeCommandIKH = ""
+		if notACurve: # if this is a splineIK system with curve input that is NOT a shape node
+			makeCommandIKH = f"nodeList[{indexHandleEffector[0]}], stuTempEffector, stuTempCurve = "
+			pass
+		else: # other normal IK systems
+			makeCommandIKH = f"nodeList[{indexHandleEffector[0]}], stuTempEffector = "
+			#                  nodeList[A]                       , nodelist[B] = 
+		
 		makeCommandIKH += f"mc.ikHandle(n=nodeList[{indexHandleEffector[0]}], sj=nodeList[{indexJointsStartEnd[0]}], ee=nodeList[{indexJointsStartEnd[1]}], solver='{handleSolverEffector[1]}'{stringIfSplineIK})"
 		#                   mc.ikHandle(n=nodeList[       nameHandle       ], sj=nodeList[       startJoint       ], ee=nodeList[        endJoint        ], solver='        ikhSolver        ', ccv=False, curve = ikCurve)
+		
+		# line comment
 		makeCommandIKH += f"\n# ikHandle: {handleSolverEffector[0]} ; start/end joints: {startEndJoints} ; ikSolver: {handleSolverEffector[1]}"
-		if stringIfSplineIK:
+		if notACurve:
+			makeCommandIKH += f" ; splineIK driver curve: {holdCurveNode}"
+		elif stringIfSplineIK:
 			makeCommandIKH += f" ; splineIK curve: {transformAndShape[0]}"
-		makeCommandIKH += f"\nnodeList[{indexHandleEffector[1]}] = mc.rename(stuTempEffector, nodeList[{indexHandleEffector[1]}]) # ikEffector node - {handleSolverEffector[2]}\n"
 
+		# rename effector node
+		makeCommandIKH += f"\nnodeList[{indexHandleEffector[1]}] = mc.rename(stuTempEffector, nodeList[{indexHandleEffector[1]}]) # ikEffector node - {handleSolverEffector[2]}"
+		# reconfigure and delete the temporary curve thing for nonstandard spline IK curve sources
+		if notACurve:
+			makeCommandIKH += f"\nmc.connectAttr(f'{thisCurveNode}', f'{'{'}nodeList[{indexHandleEffector[0]}]{'}'}.inCurve', f=True) # curve driver: {transformAndShape[0]} -> {handleSolverEffector[0]}"
+			makeCommandIKH += f"\nmc.delete(stuTempCurve) # ikHandle node - nodeList[{indexHandleEffector[0]}]"
+		
+		makeCommandIKH += "\n" #line split
 
 		ikCommands.append(makeCommandIKH)
 		# nodeList[A], tempEffector = mc.ikHandle(n=nameHandle, sj=startJoint, ee=endJoint, solver=ikhSolver, ccv=False, curve = ikCurve)
-		# nodeList[B] = mc.rename(tempEffector, nodeList[B]) # to maintain original name of effector 
+		# nodeList[B] = mc.rename(tempEffector, nodeList[B]) # to maintain original name of effector
+		# etc etc
 		# ---------------------------
-			# i am not writing the entire command on one line
+			# i am not writing the entire set of commands on one line
 
 		commandList += ikCommands # merge composed IK commands to commandList
 
@@ -592,8 +643,18 @@ for i in range(len(recheckTransformList)):
 	if recheckTransformList[i][1] in nodeListStage2:
 		parentIndex = nodeListStage2.index(recheckTransformList[i][1])
 		nodeList[recheckTransformList[i][0]] = nodeList[recheckTransformList[i][0]].replace(tfPlaceholderName,f"p=nodeList[{parentIndex}], ")
-	else:
+	else: # fallback - apply initial node name
 		nodeList[recheckTransformList[i][0]] = nodeList[recheckTransformList[i][0]].replace(tfPlaceholderName,f"p='{recheckTransformList[i][1]}', ")
+
+# find and replace placeholder nodes for all processed nodes
+for i in range(len(nodeFindReplaceList)):
+	# [ [listPointer, theIndex, theNodeName], [...], ...]
+	if nodeFindReplaceList[i][1] in nodeListStage2:
+		nodeIndex = nodeListStage2.index(recheckTransformList[i][1])
+		# nodeFindReplaceList[ -foorLoop index- ][ 0: the list pointer ][nodeFindReplaceList[ - forLoop index - ][ 1: index in list pointer ]]
+		nodeFindReplaceList[i][0][nodeFindReplaceList[i][1]] = nodeFindReplaceList[i][0][nodeFindReplaceList[1]].replace(nodePlaceholderName,f"{'{'}nodeList[{nodeIndex}]{'}'}, ")
+	else: # fallback - apply initial node name
+		nodeFindReplaceList[i][0][nodeFindReplaceList[i][1]] = nodeFindReplaceList[i][0][nodeFindReplaceList[1]].replace(nodePlaceholderName,f"'{recheckTransformList[i][1]}', ")
 
 
 """
@@ -1072,7 +1133,7 @@ for node in nodeListStage2:
 					# "1.0, 0.0, 0.0"
 				# start composing command	
 				typeFlagString = ""
-				if getAttrType != "bool":
+				if getAttrType not in ["bool", "enum"]:
 					typeFlagString = f", type='{getAttrType}'"
 				setAttrList.append(f"mc.setAttr(f'{'{'}nodeList[{nodeListStage2.index(node)}]{'}'}.{attr}', {attrFlatString} {typeFlagString}) # {node}.{attr}")
 				#                               f'  {  nodeList[             {n}            ]  }  .  attribute '
@@ -1238,7 +1299,7 @@ for node in nodeListStage2:
 	if thisNodeType in nodeTypeUseCommandsConstraint:
 		# constraint node override, connections already made
 		continue
-	if thisNodeType in nodeTypeSkip:
+	if thisNodeType in nodeTypeSkipConnections:
 		# other types of nodes to skip, see declaration above
 		continue
 	
